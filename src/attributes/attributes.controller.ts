@@ -11,7 +11,8 @@ import {
   DefaultValuePipe, 
   ParseIntPipe, 
   UsePipes, 
-  ValidationPipe 
+  ValidationPipe,
+  Res 
 } from '@nestjs/common';
 import { AttributesService } from './attributes.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
@@ -23,6 +24,9 @@ import { Role } from '../common/enums/role.enum';
 import { AttributeValuesService } from './attributes.service';
 import { CreateAttributeValueDto } from './dto/create-attribute-value.dto';
 import { UpdateAttributeValueDto } from './dto/update-attribute-value.dto';
+import { Attribute } from './entities/attribute.entity';
+import { AttributeValue } from './entities/attribute-value.entity';
+import { Response } from 'express';
 
 @Controller('attributes')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,11 +41,44 @@ export class AttributesController {
   }
 
   @Get()
-  findAll(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  ) {
-    return this.attributesService.findAll(limit, page);
+  async findAll(
+    @Query('filter') filterString: string = '{}',
+    @Query('range') rangeString: string = '[0,9]',
+    @Query('sort') sortString: string = '["id","ASC"]',
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Attribute[]> {
+    try {
+      // Parse the query parameters
+      const filter = JSON.parse(filterString);
+      const range = JSON.parse(rangeString);
+      const sort = JSON.parse(sortString);
+
+      // Extract values
+      const [start, end] = range;
+      const [sortField, sortOrder] = sort;
+
+      // Call service with extracted parameters
+      const { data, totalCount } = await this.attributesService.findAllSimpleRest({
+        start,
+        end,
+        sort: sortField,
+        order: sortOrder,
+        filters: filter,
+      });
+      // Set Content-Range header in the format React Admin expects
+      res.header(
+        'Content-Range', 
+        `attributes ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
+      );
+      
+      // Make sure header is exposed via CORS
+      res.header('Access-Control-Expose-Headers', 'Content-Range');
+
+      return data;
+    } catch (error) {
+      console.error('Error processing request:', error);
+      throw error;
+    }
   }
 
   @Get(':id')
@@ -76,11 +113,45 @@ export class AttributeValuesController {
   }
 
   @Get()
-  findAll(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  ) {
-    return this.attributeValuesService.findAll(limit, page);
+  async findAll(
+    @Query('filter') filterString: string = '{}',
+    @Query('range') rangeString: string = '[0,9]',
+    @Query('sort') sortString: string = '["id","ASC"]',
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AttributeValue[]> {
+    try {
+      // Parse the query parameters
+      const filter = JSON.parse(filterString);
+      const range = JSON.parse(rangeString);
+      const sort = JSON.parse(sortString);
+
+      // Extract values
+      const [start, end] = range;
+      const [sortField, sortOrder] = sort;
+
+      // Call service with extracted parameters
+      const { data, totalCount } = await this.attributeValuesService.findAllSimpleRest({
+        start,
+        end,
+        sort: sortField,
+        order: sortOrder,
+        filters: filter,
+      });
+
+      // Set Content-Range header in the format React Admin expects
+      res.header(
+        'Content-Range', 
+        `attribute-values ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
+      );
+      
+      // Make sure header is exposed via CORS
+      res.header('Access-Control-Expose-Headers', 'Content-Range');
+
+      return data;
+    } catch (error) {
+      console.error('Error processing request:', error);
+      throw error;
+    }
   }
 
   @Get(':id')

@@ -6,6 +6,9 @@ export class Attribute {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'int', nullable: false })
+  position: number; 
+
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 100, unique: true })
   name: string; // e.g., 'Color', 'Size'

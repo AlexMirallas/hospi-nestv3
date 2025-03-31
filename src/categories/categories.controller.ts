@@ -11,7 +11,8 @@ import {
   DefaultValuePipe, 
   ParseIntPipe, 
   UsePipes, 
-  ValidationPipe 
+  ValidationPipe,
+  Res
 } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -20,6 +21,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators';
 import { Role } from '../common/enums/role.enum';
+import { Category } from './entities/category.entity';
+import { Response } from 'express';
 
 @Controller('categories')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -34,11 +37,45 @@ export class CategoriesController {
   }
 
   @Get()
-  findAll(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  ) {
-    return this.categoriesService.findAll(limit, page);
+  async findAll(
+    @Query('filter') filterString: string = '{}',
+    @Query('range') rangeString: string = '[0,9]',
+    @Query('sort') sortString: string = '["id","ASC"]',
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<Category[]> {
+    try {
+      // Parse the query parameters
+      const filter = JSON.parse(filterString);
+      const range = JSON.parse(rangeString);
+      const sort = JSON.parse(sortString);
+
+      // Extract values
+      const [start, end] = range;
+      const [sortField, sortOrder] = sort;
+
+       // Call service with extracted parameters
+       const { data, totalCount } = await this.categoriesService.findAllSimpleRest({
+        start,
+        end,
+        sort: sortField,
+        order: sortOrder,
+        filters: filter,
+      });
+
+      // Set Content-Range header in the format React Admin expects
+      res.header(
+        'Content-Range', 
+        `categories ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
+      );
+      
+      // Make sure header is exposed via CORS
+      res.header('Access-Control-Expose-Headers', 'Content-Range');
+
+      return data;
+    } catch (error) {
+      console.error('Error processing request:', error);
+      throw error;
+    }
   }
 
   @Get('tree')

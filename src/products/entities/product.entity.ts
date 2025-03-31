@@ -34,6 +34,5 @@ export class Product {
   attributeCombinations: ProductAttribute[];
 
   @ManyToMany(() => Category, (category) => category.products)
-  // NOTE: @JoinTable is ONLY on the Category side (or the owning side)
   categories: Category[];
 }

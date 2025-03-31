@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { SimpleRestParams } from '../users/users.service';
 
 @Injectable()
 export class ProductsService {
@@ -17,41 +18,74 @@ export class ProductsService {
     return this.repo.save(product);
   }
 
-  async findAll(
-    limit = 10, 
-    page = 1, 
-    categoryId?: number
-  ): Promise<{items: Product[], total: number, page: number, pageCount: number}> {
-    const queryBuilder = this.repo.createQueryBuilder('product')
-      .leftJoinAndSelect('product.categories', 'category')
-      .leftJoinAndSelect('product.attributes', 'productAttribute')
-      .leftJoinAndSelect('productAttribute.attributeValue', 'attributeValue')
-      .leftJoinAndSelect('attributeValue.attribute', 'attribute');
+  async findAllSimpleRest(
+    params: SimpleRestParams,
+  ): Promise<{ data: Product[]; totalCount: number }> {
+    const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
+  
+    // Calculate TypeORM pagination options
+    const take = end - start + 1;
+    const skip = start;
     
-    if (categoryId) {
-      queryBuilder.where('category.id = :categoryId', { categoryId });
+    
+    // Build a query builder for more complex queries
+    const queryBuilder = this.repo.createQueryBuilder('product')
+    .leftJoinAndSelect('product.categories', 'category')
+    .leftJoinAndSelect('product.attributeCombinations', 'productAttribute') 
+    .leftJoinAndSelect('productAttribute.attributeValue', 'attributeValue')
+    .leftJoinAndSelect('attributeValue.attribute', 'attribute');
+    
+      // Add where clauses for filters
+    if (filters) {
+      for (const key in filters) {
+        if (
+          Object.prototype.hasOwnProperty.call(filters, key) && 
+          filters[key] !== undefined &&
+          filters[key] !== null
+        ) {
+          // Handle special case for categoryId
+          if (key === 'categoryId' && filters[key]) {
+            queryBuilder.andWhere('category.id = :categoryId', { categoryId: filters[key] });
+          }
+          // Handle regular fields
+          else if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
+            queryBuilder.andWhere(`product.${key} = :${key}`, { [key]: filters[key] });
+          } else {
+            console.warn(`Ignoring invalid filter field: ${key}`);
+          }
+        }
+      }
+    }
+
+    // Add sorting
+    if (sort && this.repo.metadata.hasColumnWithPropertyPath(sort)) {
+      queryBuilder.orderBy(`product.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
+    } else {
+      // Default sort
+      queryBuilder.orderBy('product.id', 'ASC');
     }
     
-    queryBuilder.take(limit).skip((page - 1) * limit);
+    // Add pagination
+    queryBuilder.skip(skip).take(take);
     
-    const [items, total] = await queryBuilder.getManyAndCount();
-    
-    return {
-      items,
-      total,
-      page,
-      pageCount: Math.ceil(total / limit)
-    };
+    // Execute the query
+    const [data, totalCount] = await queryBuilder.getManyAndCount();
+  
+    return { 
+      data: data, 
+      totalCount: totalCount || 0};
   }
+
+
 
   async findOne(id: string): Promise<Product> {
     const product = await this.repo.findOne({ 
       where: { id },
       relations: [
         'categories', 
-        'attributes', 
-        'attributes.attributeValue', 
-        'attributes.attributeValue.attribute'
+        'attributeCombinations',
+        'attributeCombinations.attributeValue', 
+        'attributeCombinations.attributeValue.attribute'
       ] 
     });
     

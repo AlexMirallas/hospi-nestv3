@@ -8,11 +8,11 @@ import {
   Delete, 
   UseGuards, 
   Query, 
-  DefaultValuePipe, 
-  ParseIntPipe, 
   UsePipes, 
-  ValidationPipe 
+  ValidationPipe,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -20,25 +20,60 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators';
 import { Role } from '../common/enums/role.enum';
+import { User } from './entities/user.entity';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
   @Roles(Role.Admin)
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @Get()
-  findAll(
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-  ) {
-    return this.usersService.findAll(limit, page);
+  async findAll(
+    @Query('filter') filterString: string = '{}',
+    @Query('range') rangeString: string = '[0,9]',
+    @Query('sort') sortString: string = '["id","ASC"]',
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<User[]> {
+    try {
+      // Parse the query parameters
+      const filter = JSON.parse(filterString);
+      const range = JSON.parse(rangeString);
+      const sort = JSON.parse(sortString);
+
+      // Extract values
+      const [start, end] = range;
+      const [sortField, sortOrder] = sort;
+
+      // Call service with extracted parameters
+      const { data, totalCount } = await this.usersService.findAllSimpleRest({
+        start,
+        end,
+        sort: sortField,
+        order: sortOrder,
+        filters: filter,
+      });
+
+      // Set Content-Range header in the format React Admin expects
+      res.header(
+        'Content-Range', 
+        `users ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
+      );
+      
+      // Make sure header is exposed via CORS
+      res.header('Access-Control-Expose-Headers', 'Content-Range');
+
+      return data;
+    } catch (error) {
+      console.error('Error processing request:', error);
+      throw error;
+    }
   }
 
   @Get(':id')
@@ -48,6 +83,7 @@ export class UsersController {
 
   @Patch(':id')
   @Roles(Role.Admin)
+  @UsePipes(new ValidationPipe({ whitelist: true }))
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
@@ -57,11 +93,4 @@ export class UsersController {
   remove(@Param('id') id: string) {
     return this.usersService.remove(id);
   }
-
-  @Get('simple')
-  findSimpleUsers() {
-    return this.usersService.findAll();
-  }
 }
-
-

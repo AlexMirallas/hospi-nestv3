@@ -40,15 +40,15 @@ export class AuthService {
       accessToken: this.jwtService.sign(payload),
     };
   }
-   // --- NEW SIGNUP METHOD ---
+   
    async signup(signUpDto: SignUpDto): Promise<{ accessToken: string, user: Omit<User, 'password' | 'validatePassword' | 'hashPassword'> }> {
-    // 1. Check if user already exists
+    //Check if user exists
     const existingUser = await this.usersService.findOneByEmail(signUpDto.email);
     if (existingUser) {
       throw new ConflictException('Email address is already registered.');
     }
 
-    // 2. Create user object (mapping SignUpDto to CreateUserDto structure)
+    // Create user object (mapping SignUpDto to CreateUserDto structure)
     const createUserDto: CreateUserDto = {
         ...signUpDto,
         roles: [Role.Admin], // Assign default role explicitly

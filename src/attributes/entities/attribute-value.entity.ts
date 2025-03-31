@@ -8,6 +8,9 @@ export class AttributeValue {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Column({ type: 'int', nullable: false })
+  position: number; // Position of the attribute value in the list (e.g., 1 for first, 2 for second, etc.)
+
   @Column({ type: 'varchar', length: 100 })
   value: string; // e.g., 'Red', 'XL'
 

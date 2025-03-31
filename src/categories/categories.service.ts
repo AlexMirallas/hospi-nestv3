@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, FindOptionsOrder, FindOptionsWhere } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { SimpleRestParams } from '../users/users.service'; 
 
 @Injectable()
 export class CategoriesService {
@@ -17,19 +18,58 @@ export class CategoriesService {
     return this.repo.save(category);
   }
 
-  async findAll(limit = 10, page = 1): Promise<{items: Category[], total: number, page: number, pageCount: number}> {
-    const [items, total] = await this.repo.findAndCount({
-      take: limit,
-      skip: (page - 1) * limit,
-      relations: ['parent', 'children', 'products']
-    });
+  async findAllSimpleRest(
+    params: SimpleRestParams,
+  ): Promise<{ data: Category[]; totalCount: number }> {
+    const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
+  
+    // Calculate TypeORM pagination options
+    const take = end - start + 1;
+    const skip = start;
+  
+    // Build TypeORM sorting options
+    const orderOptions: FindOptionsOrder<Category> = {};
+    if (sort) {
+      if (this.repo.metadata.hasColumnWithPropertyPath(sort)) {
+        orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
+      } else {
+        console.warn(`Ignoring invalid sort field: ${sort}`);
+        // Default sort if invalid
+        orderOptions['id'] = 'ASC';
+      }
+    } else {
+      // Default sort
+      orderOptions['id'] = 'ASC';
+    }
+
+    // Build TypeORM where options for filtering
+    const whereOptions: FindOptionsWhere<Category> = {};
     
-    return {
-      items,
-      total,
-      page,
-      pageCount: Math.ceil(total / limit)
-    };
+    // Process filter object
+    for (const key in filters) {
+      if (
+        Object.prototype.hasOwnProperty.call(filters, key) && 
+        filters[key] !== undefined &&
+        filters[key] !== null
+      ) {
+        // Check if this is a valid field
+        if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
+          whereOptions[key] = filters[key];
+        } else {
+          console.warn(`Ignoring invalid filter field: ${key}`);
+        }
+      }
+    }
+    // Fetch data and total count with relations
+    const [data, totalCount] = await this.repo.findAndCount({
+      where: whereOptions,
+      order: orderOptions,
+      take: take,
+      skip: skip,
+      relations: ['parent', 'children'], // Include related categories
+    });
+  
+    return { data, totalCount };
   }
 
   async findOne(id: number): Promise<Category> {
