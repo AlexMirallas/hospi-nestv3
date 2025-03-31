@@ -25,7 +25,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UsePipes(ValidationPipe)
   async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+    try {
+      console.log('Login attempt:', loginDto);
+      const result = await this.authService.login(loginDto);
+      console.log('Login result:', result);
+      return result;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw new Error(`Authentication failed: ${error.message}`);
+    };
   }
 
   @Post('logout')

@@ -1,6 +1,6 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import { ClassSerializerInterceptor, ValidationPipe, } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 // import { JwtAuthGuard } from './common/guards/jwt-auth.guard'; // Import if setting globally
 // import { RolesGuard } from './common/guards/roles.guard'; // Import if setting globally
@@ -9,11 +9,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Enable CORS (configure appropriately for production)
-  app.enableCors({
-    origin: '*', // Allow all origins for dev, restrict in prod!
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    allowedHeaders: 'Content-Type, Accept, Authorization',
-  });
+  app.enableCors();
 
   // Global Pipes for Validation
   app.useGlobalPipes(
@@ -28,7 +24,7 @@ async function bootstrap() {
   );
 
   // Global Interceptor for Class Serializer (works with @Exclude(), @Expose())
-   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   // ---- Optional: Global Guards ----
   // If you want ALL endpoints to require JWT by default:

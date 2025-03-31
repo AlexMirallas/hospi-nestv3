@@ -62,7 +62,7 @@ export class AuthService {
         // Let's assume UsersService has a simpler create method or we use the repo directly for simplicity here.
 
         // Option A: Assuming UsersService has a direct create method:
-         newUser = await this.usersService.createUserDirectly(createUserDto); // You'd need to implement this in UsersService
+         newUser = await this.usersService.create(createUserDto); // You'd need to implement this in UsersService
 
         // Option B: Using the repository directly (requires injecting UserRepository in UsersService or here)
         // const user = this.usersService.repo.create(createUserDto); // Create entity instance
