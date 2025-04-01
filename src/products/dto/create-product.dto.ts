@@ -18,12 +18,16 @@ export class CreateProductDto {
     description?: string;
 
     @IsNumber()
-    // @IsDecimal({ decimal_digits: '2' }) // Not a default validator, might need custom or leave as number
     basePrice: number;
 
     @IsOptional()
     @IsBoolean()
     isActive?: boolean = true;
+
+    //handle category IDs
+    @IsOptional()
+    @IsArray()
+    categoryIds?: string[];
 
     // Handle nested attribute combinations
     @IsOptional()

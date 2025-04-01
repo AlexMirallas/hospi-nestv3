@@ -9,7 +9,7 @@ async function bootstrap() {
 
   // Enable CORS (configure appropriately for production)
   app.enableCors(
-    {exposedHeaders: ['Content-Range']}
+    {exposedHeaders: 'Content-Range',} // Expose Content-Range header for CORS
   );
 
   // Global Pipes for Validation

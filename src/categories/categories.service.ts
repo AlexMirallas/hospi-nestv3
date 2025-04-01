@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsOrder, FindOptionsWhere } from 'typeorm';
+import { Repository, FindOptionsOrder, FindOptionsWhere, In } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -43,23 +43,39 @@ export class CategoriesService {
     }
 
     // Build TypeORM where options for filtering
-    const whereOptions: FindOptionsWhere<Category> = {};
+    const whereOptions: FindOptionsWhere<Category> | FindOptionsWhere<Category[]> = {};
     
     // Process filter object
-    for (const key in filters) {
-      if (
-        Object.prototype.hasOwnProperty.call(filters, key) && 
-        filters[key] !== undefined &&
-        filters[key] !== null
-      ) {
-        // Check if this is a valid field
-        if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
-          whereOptions[key] = filters[key];
-        } else {
-          console.warn(`Ignoring invalid filter field: ${key}`);
-        }
+    if (filters) {
+      for (const key in filters) {
+          if (key === 'id') { // <--- SPECIAL HANDLING FOR ID FILTER
+              const ids = filters[key];
+              if (Array.isArray(ids) && ids.length > 0) {
+                  // Ensure they are numbers before passing to IN
+                  const numericIds = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+                  if (numericIds.length > 0) {
+                     whereOptions[key] = In(numericIds); // <--- USE 'In' OPERATOR
+                  } else {
+                     // If filter IDs were invalid, ensure query returns nothing for this filter
+                     whereOptions[key] = In([]);
+                  }
+              } else if (!isNaN(parseInt(ids, 10))) {
+                  // Handle case where filter might be passed as single ID: filter={"id": 2}
+                  whereOptions[key] = parseInt(ids, 10);
+              } else {
+                  // Invalid ID format in filter, ensure query returns nothing
+                  whereOptions[key] = In([]);
+              }
+          } else if (/* other specific filters like name_like, etc. */ false ) {
+               // Handle other filters (e.g., using Like() operator)
+               // where[key] = Like(`%${filter[key]}%`);
+          }
+           else {
+              // Default simple equality for other fields (if applicable)
+              whereOptions[key] = filters[key];
+          }
       }
-    }
+  }
     // Fetch data and total count with relations
     const [data, totalCount] = await this.repo.findAndCount({
       where: whereOptions,

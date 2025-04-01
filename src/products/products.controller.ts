@@ -12,7 +12,11 @@ import {
   ParseIntPipe, 
   UsePipes, 
   ValidationPipe,
-  Res
+  Res,
+  HttpStatus,
+  Put,
+  ParseUUIDPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -54,7 +58,7 @@ export class ProductsController {
       const [sortField, sortOrder] = sort;
 
       // Call service with extracted parameters
-      const { data, totalCount } = await this.productsService.findAllSimpleRest({
+      const { data, total } = await this.productsService.findAllSimpleRest({
         start,
         end,
         sort: sortField,
@@ -63,12 +67,14 @@ export class ProductsController {
       });
       res.header(
         'Content-Range', 
-        `products ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`,
+        `products ${start}-${Math.min(end, total - 1)}/${total}`,
       );
+      res.status(HttpStatus.OK);
       
       // Make sure header is exposed via CORS
       res.header('Access-Control-Expose-Headers', 'Content-Range');
-      res.header('X-Total-Count', `${totalCount}`);
+      
+
 
       return data;
     } catch (error) {
@@ -82,11 +88,21 @@ export class ProductsController {
     return this.productsService.findOne(id);
   }
 
-  @Patch(':id')
-  @Roles(Role.Admin)
-  update(@Param('id') id: string, @Body() updateProductDto: UpdateProductDto) {
-    return this.productsService.update(id, updateProductDto);
-  }
+  @Put(':id') 
+    async update(
+        @Param('id', ParseUUIDPipe) id: string, 
+        @Body() updateProductDto: UpdateProductDto 
+    ) {
+        try {
+            const updatedProduct = await this.productsService.update(id, updateProductDto);
+            return updatedProduct; 
+        } catch (error) {
+            if (error instanceof NotFoundException) { 
+                throw new NotFoundException(`Product with ID ${id} not found`);
+            }
+            throw error;
+        }
+    }
 
   @Delete(':id')
   @Roles(Role.Admin)

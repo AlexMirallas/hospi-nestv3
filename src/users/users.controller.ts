@@ -81,6 +81,7 @@ export class UsersController {
     return this.usersService.findOne(id);
   }
 
+
   @Patch(':id')
   @Roles(Role.Admin)
   @UsePipes(new ValidationPipe({ whitelist: true }))

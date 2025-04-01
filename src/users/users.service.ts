@@ -21,59 +21,93 @@ export class UsersService {
     private usersRepository: Repository<User>
   ) {}
 
-  async findAllSimpleRest(
-    params: SimpleRestParams,
-  ): Promise<{ data: User[]; totalCount: number }> {
-    const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
-  
-    // Calculate TypeORM pagination options
-    const take = end - start + 1;
-    const skip = start;
-  
-    // Build TypeORM sorting options
-    const orderOptions: FindOptionsOrder<User> = {};
-    if (sort) {
-      if (this.usersRepository.metadata.hasColumnWithPropertyPath(sort)) {
-        orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
-      } else {
-        console.warn(`Ignoring invalid sort field: ${sort}`);
-        // Default to id if invalid sort field
-        orderOptions['id'] = 'ASC';
-      }
-    } else {
-      // Default sort
-      orderOptions['id'] = 'ASC';
-    }
-  
-    // Build TypeORM where options for filtering
-    const whereOptions: FindOptionsWhere<User> = {};
-    
-    // Process filter object
-    for (const key in filters) {
-      if (
-        Object.prototype.hasOwnProperty.call(filters, key) && 
-        filters[key] !== undefined &&
-        filters[key] !== null
-      ) {
-        // Check if this is a valid field
+  // Near the top of your service class:
+
+
+async findAllSimpleRest(
+  params: SimpleRestParams,
+): Promise<{ data: User[]; totalCount: number }> {
+  const { start = 0, end = 9, sort = 'id', order = 'ASC', filters = {} } = params;
+
+  // Calculate pagination
+  const take = end - start + 1;
+  const skip = start;
+
+  // Create query builder
+  const qb = this.usersRepository.createQueryBuilder('user');
+
+  // Add filters
+  for (const key in filters) {
+    if (
+      Object.prototype.hasOwnProperty.call(filters, key) && 
+      filters[key] !== undefined &&
+      filters[key] !== null
+    ) {
+      try {
         if (this.usersRepository.metadata.hasColumnWithPropertyPath(key)) {
-          whereOptions[key] = filters[key];
+          // Get column metadata to check type
+          const column = this.usersRepository.metadata.findColumnWithPropertyPath(key);
+          
+          // Special case for roles column
+          if (key === 'roles') {
+            // If looking for a single role (string value)
+            if (typeof filters[key] === 'string') {
+              // Use array contains operator
+              qb.andWhere(`user.roles @> ARRAY[:${key}]::users_roles_enum[]`, { 
+                [key]: filters[key] 
+              });
+            }
+            // If looking for multiple roles (array value)
+            else {
+              throw new Error('No user roles filter found in the request');
+            }
+            continue; // Skip the rest of the loop for this iteration
+          }
+          
+          // Handle other array columns
+          if (column?.type === 'simple-array' || column?.type === 'array') {
+            // For array columns we need special handling
+            if (Array.isArray(filters[key])) {
+              // If value is array, use the @> operator (contains)
+              qb.andWhere(`user.${key} @> ARRAY[:...${key}Value]::varchar[]`, { 
+                [`${key}Value`]: filters[key] 
+              });
+            } else {
+              // For non-array values looking for exact match within array
+              qb.andWhere(`user.${key} @> ARRAY[:${key}Value]::varchar[]`, { 
+                [`${key}Value`]: filters[key] 
+              });
+            }
+          } else {
+            // Regular column, use standard equality
+            qb.andWhere(`user.${key} = :${key}Value`, { 
+              [`${key}Value`]: filters[key] 
+            });
+          }
         } else {
-          console.warn(`Ignoring invalid filter field: ${key}`);
+          console.warn(`Ignoring invalid filter field in users: ${key}`);
         }
+      } catch (error) {
+        console.error(`Error with filter ${key}:`, error);
       }
     }
-  
-    // Fetch data and total count
-    const [data, totalCount] = await this.usersRepository.findAndCount({
-      where: whereOptions,
-      order: orderOptions,
-      take: take,
-      skip: skip,
-    });
-  
-    return { data, totalCount };
   }
+
+  // Add sorting
+  if (this.usersRepository.metadata.hasColumnWithPropertyPath(sort)) {
+    qb.orderBy(`user.${sort}`, order as 'ASC' | 'DESC');
+  } else {
+    qb.orderBy('user.id', 'ASC');
+  }
+
+  // Add pagination
+  qb.skip(skip).take(take);
+
+  // Execute query
+  const [data, totalCount] = await qb.getManyAndCount();
+
+  return { data, totalCount };
+}
 
   async findOne(id: string): Promise<User> {
     const user = await this.usersRepository.findOne({ where: { id } });
@@ -106,4 +140,7 @@ export class UsersService {
     const user = await this.findOne(id);
     await this.usersRepository.remove(user);
   }
+
+  
+
 }

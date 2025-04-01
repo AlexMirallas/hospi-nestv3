@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, IsNumber,IsOptional,Matches,IsHexColor } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, IsNumber,IsOptional,Matches,IsHexColor, Min } from 'class-validator';
 
 export class CreateAttributeValueDto {
     @IsString()
@@ -17,4 +17,11 @@ export class CreateAttributeValueDto {
     })
     @MaxLength(7)
     hexCode?: string | null; // e.g., #FF0000
+
+    @IsNumber()
+    @IsNotEmpty()
+    @Min(0)
+    position?: number; 
+
+    
 }

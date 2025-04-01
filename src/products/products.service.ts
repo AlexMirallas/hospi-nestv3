@@ -1,16 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { SimpleRestParams } from '../users/users.service';
+import { Category } from '../categories/entities/category.entity';
+import { BadRequestException } from '@nestjs/common/exceptions/bad-request.exception';
 
 @Injectable()
 export class ProductsService {
   constructor(
     @InjectRepository(Product)
-    private repo: Repository<Product>
+    private repo: Repository<Product>,
+    @InjectRepository(Category)
+    private categoryRepository: Repository<Category>, 
   ) {}
 
   async create(createProductDto: CreateProductDto): Promise<Product> {
@@ -20,7 +24,7 @@ export class ProductsService {
 
   async findAllSimpleRest(
     params: SimpleRestParams,
-  ): Promise<{ data: Product[]; totalCount: number }> {
+  ): Promise<{ data: Product[] ; total: number }> {
     const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
   
     // Calculate TypeORM pagination options
@@ -51,7 +55,7 @@ export class ProductsService {
           else if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
             queryBuilder.andWhere(`product.${key} = :${key}`, { [key]: filters[key] });
           } else {
-            console.warn(`Ignoring invalid filter field: ${key}`);
+            queryBuilder.andWhere(`product.${key} LIKE :${key}`, { [key]: `%${filters[key]}%` });
           }
         }
       }
@@ -69,11 +73,9 @@ export class ProductsService {
     queryBuilder.skip(skip).take(take);
     
     // Execute the query
-    const [data, totalCount] = await queryBuilder.getManyAndCount();
-  
-    return { 
-      data: data, 
-      totalCount: totalCount || 0};
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return {data, total};
   }
 
 
@@ -92,14 +94,46 @@ export class ProductsService {
     if (!product) {
       throw new NotFoundException(`Product with ID ${id} not found`);
     }
+
+    const categoryIds = product.categories.map(category => category.id);
+    product['categoryIds'] = categoryIds;
     
     return product;
   }
 
   async update(id: string, updateProductDto: UpdateProductDto): Promise<Product> {
-    const product = await this.findOne(id);
+    const product = await this.repo.findOne({
+      where: { id },
+      relations: [
+        'categories', 
+        'attributeCombinations',
+        'attributeCombinations.attributeValue', 
+        'attributeCombinations.attributeValue.attribute'
+      ]
+    });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+   }
     
     Object.assign(product, updateProductDto);
+
+    if (updateProductDto.categoryIds) { // Check if categoryIds are part of the update payload
+      if (updateProductDto.categoryIds.length > 0) {
+          const categories = await this.categoryRepository.findBy({
+              id: In(updateProductDto.categoryIds), // Use TypeORM's In operator
+          });
+           // Basic check: Ensure all requested category IDs were found
+          if (categories.length !== updateProductDto.categoryIds.length) {
+              // Handle error - some category IDs were invalid
+              throw new BadRequestException('Invalid category ID provided');
+          }
+          product.categories = categories; // Assign the fetched Category entities
+      } else {
+           // If an empty array is sent, remove all category associations
+          product.categories = [];
+      }
+  }
     
     return this.repo.save(product);
   }
