@@ -109,6 +109,7 @@ export class AttributeValuesController {
 
   @Post()
   create(@Body() createDto: CreateAttributeValueDto) {
+    console.log('Creating attribute value:', createDto);
     return this.attributeValuesService.create(createDto);
   }
 
@@ -130,7 +131,7 @@ export class AttributeValuesController {
       const [sortField, sortOrder] = sort;
 
       // Call service with extracted parameters
-      const { data, totalCount } = await this.attributeValuesService.findAllSimpleRest({
+      const { data, total } = await this.attributeValuesService.findAllSimpleRest({
         start,
         end,
         sort: sortField,
@@ -141,7 +142,7 @@ export class AttributeValuesController {
       // Set Content-Range header in the format React Admin expects
       res.header(
         'Content-Range', 
-        `attribute-values ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
+        `attribute-values ${start}-${Math.min(end, total - 1)}/${total}`
       );
       
       // Make sure header is exposed via CORS

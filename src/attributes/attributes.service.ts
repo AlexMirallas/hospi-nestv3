@@ -134,58 +134,97 @@ export class AttributeValuesService {
 
   async findAllSimpleRest(
     params: SimpleRestParams,
-  ): Promise<{ data: AttributeValue[]; totalCount: number }> {
-    const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
-  
-    // Calculate TypeORM pagination options
+  ): Promise<{ data: AttributeValue[]; total: number }> { // Changed totalCount to total
+    const { start = 0, end = 9, sort="id", order = 'ASC', filters = {} } = params;
+
     const take = end - start + 1;
     const skip = start;
-  
+
     // Build TypeORM sorting options
     const orderOptions: FindOptionsOrder<AttributeValue> = {};
-    if (sort) {
-      if (this.repo.metadata.hasColumnWithPropertyPath(sort)) {
-        orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
-      } else {
-        console.warn(`Ignoring invalid sort field: ${sort}`);
-        // Default sort if invalid
-        orderOptions['id'] = 'ASC';
-      }
+    // Basic check: refine if you need related field sorting (QueryBuilder is better for that)
+    if (sort && (this.repo.metadata.hasColumnWithPropertyPath(sort) || sort === 'id')) {
+      orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
     } else {
-      // Default sort
-      orderOptions['id'] = 'ASC';
+      console.warn(`findAllSimpleRest (AttributeValue): Ignoring invalid sort field '${sort}', defaulting to 'id ASC'.`);
+      orderOptions['id'] = 'ASC'; // Default sort
     }
-  
-    // Build TypeORM where options for filtering
+
+    // Build TypeORM where options carefully
     const whereOptions: FindOptionsWhere<AttributeValue> = {};
 
     for (const key in filters) {
       if (
-        Object.prototype.hasOwnProperty.call(filters, key) && 
+        Object.prototype.hasOwnProperty.call(filters, key) &&
         filters[key] !== undefined &&
-        filters[key] !== null
+        filters[key] !== null &&
+        filters[key] !== '' // Often useful to ignore empty string filters
       ) {
-        // Check if this is a valid field
-        if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
-          whereOptions[key] = filters[key];
+        const filterValue = filters[key];
+
+        // --- Specific Handling for ID Filter ---
+        if (key === 'id') {
+          // If react-admin sends an array for getMany
+          if (Array.isArray(filterValue) && filterValue.length > 0) {
+             // Ensure values are of the correct type (e.g., number if ID is integer)
+             const parsedIds = filterValue.map(id => parseInt(String(id), 10)).filter(id => !isNaN(id));
+             if (parsedIds.length > 0) {
+                 whereOptions.id = In(parsedIds); // Use TypeORM's In operator
+             }
+          }
+          // If react-admin sends a single value for filtering
+          else if (!Array.isArray(filterValue)) {
+              const parsedId = parseInt(String(filterValue), 10);
+              if(!isNaN(parsedId)) {
+                  whereOptions.id = parsedId; // Assign the primitive number
+              } else {
+                   console.warn(`findAllSimpleRest (AttributeValue): Invalid non-numeric ID filter value ignored: ${filterValue}`);
+              }
+          }
+          // Ignore empty arrays or other invalid formats
+        }
+        // --- Specific Handling for attributeId Filter (if used) ---
+        // Assumes 'attributeId' is the filter key from frontend, and maps to 'attribute' relation ID
+        else if (key === 'attributeId') {
+             // ReferenceInput usually sends a single ID
+             const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue; // Handle accidental array wrapping
+             if (idValue !== undefined && idValue !== null) {
+                 whereOptions.attributeId = parseInt(idValue); 
+             }
+        }
+         // --- Generic Handling for other direct columns ---
+         else if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
+            // Simple assignment might be okay for other fields, but consider type safety
+            // Example: For string fields, you might want ILike
+            // if (typeof filterValue === 'string') {
+            //   whereOptions[key] = ILike(`%${filterValue}%`); // Import ILike
+            // } else {
+                 whereOptions[key] = filterValue;
+            // }
         } else {
-          console.warn(`Ignoring invalid filter field: ${key}`);
+          console.warn(`findAllSimpleRest (AttributeValue): Ignoring invalid filter field: ${key}`);
         }
       }
     }
-  
-    // Fetch data and total count with relations
-    const [data, totalCount] = await this.repo.findAndCount({
-      where: whereOptions,
-      order: orderOptions,
-      take: take,
-      skip: skip,
-      relations: ['attribute'], // Include the parent attribute
-    });
-  
-    return { data, totalCount };
-  }
 
+    try {
+        // Fetch data and total count with relations
+        const [data, total] = await this.repo.findAndCount({ // Changed totalCount to total
+          where: whereOptions,
+          order: orderOptions,
+          take: take,
+          skip: skip,
+          relations: ['attribute'], // Include the parent attribute
+        });
+
+        return { data, total }; 
+    } catch (error) {
+        console.error("Error during AttributeValue findAndCount:", error);
+        console.error("Query Parameters Used:", { where: whereOptions, order: orderOptions, take, skip });
+        // Re-throw the error to be handled by NestJS exception filters
+        throw error;
+    }
+  }
 
   async findOne(id: number): Promise<AttributeValue> {
     const attributeValue = await this.repo.findOne({ 

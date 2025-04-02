@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany } from 'typeorm';
 import { ProductAttribute } from '../entities/product-attribute.entity';
 import { Category } from '../../categories/entities/category.entity';
+import { ProductVariant } from './product-variant.entity'; 
 
 @Entity('products')
 export class Product {
@@ -9,7 +10,7 @@ export class Product {
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 255, unique: true })
-  sku: string; // Base Stock Keeping Unit
+  sku: string; //  Stock Keeping Unit
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
@@ -35,4 +36,10 @@ export class Product {
 
   @ManyToMany(() => Category, (category) => category.products)
   categories: Category[];
+
+  
+  @OneToMany(() => ProductVariant, variant => variant.product, {
+  cascade: true
+  })
+  variants: ProductVariant[];
 }

@@ -24,6 +24,7 @@ export class AppController {
         status: 'ok',
         database: isConnected ? 'connected' : 'disconnected',
         timestamp: new Date().toISOString(),
+        databaseName: this.dataSource.options.database,
       };
     } catch (error) {
       return {

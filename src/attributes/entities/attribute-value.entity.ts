@@ -15,8 +15,8 @@ export class AttributeValue {
   value: string; // e.g., 'Red', 'XL'
 
   @Column({ type: 'varchar', length: 7, nullable: true }) // e.g., #FF0000
-  @IsOptional() // Make it optional at the entity level
-  @IsHexColor() // Validate format if present
+  @IsOptional() 
+  @IsHexColor() 
   hexCode: string | null;
 
   @ManyToOne(() => Attribute, (attribute) => attribute.values, { nullable: false, onDelete: 'CASCADE' })
@@ -37,6 +37,6 @@ export class AttributeValue {
 
   isColorAttribute(): boolean {
     // Ensure attribute is loaded and name exists before checking
-    return this.attribute && this.attribute.name?.toLowerCase() === 'color';
+    return this.attribute && this.attribute.name?.toLowerCase() === 'couleur';
   }
 }
