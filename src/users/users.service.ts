@@ -4,15 +4,17 @@ import { Repository,FindOptionsWhere, FindOptionsOrder, MoreThanOrEqual, LessTha
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the path as necessary
 
 
-export interface SimpleRestParams {
+/*export interface SimpleRestParams {
   start?: number;
   end?: number;
   sort?: string;
   order?: 'ASC' | 'DESC';
   filters?: Record<string, any>;
 }
+  */
 
 @Injectable()
 export class UsersService {

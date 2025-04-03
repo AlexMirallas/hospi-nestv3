@@ -1,5 +1,4 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany } from 'typeorm';
-import { ProductAttribute } from '../entities/product-attribute.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { ProductVariant } from './product-variant.entity'; 
 
@@ -30,9 +29,6 @@ export class Product {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  // A product can have many attribute combinations (variants)
-  @OneToMany(() => ProductAttribute, (productAttribute) => productAttribute.product, { cascade: ['insert', 'update'] })
-  attributeCombinations: ProductAttribute[];
 
   @ManyToMany(() => Category, (category) => category.products)
   categories: Category[];

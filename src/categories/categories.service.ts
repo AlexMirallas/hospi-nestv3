@@ -4,7 +4,7 @@ import { Repository, FindOptionsOrder, FindOptionsWhere, In } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { SimpleRestParams } from '../users/users.service'; 
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the path as necessary
 
 @Injectable()
 export class CategoriesService {

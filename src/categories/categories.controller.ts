@@ -3,13 +3,11 @@ import {
   Get, 
   Post, 
   Body, 
-  Patch, 
+  Put, 
   Param, 
   Delete, 
   UseGuards, 
   Query, 
-  DefaultValuePipe, 
-  ParseIntPipe, 
   UsePipes, 
   ValidationPipe,
   Res
@@ -88,7 +86,7 @@ export class CategoriesController {
     return this.categoriesService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   @Roles(Role.Admin)
   update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
     return this.categoriesService.update(+id, updateCategoryDto);

@@ -11,10 +11,10 @@ import { Product } from './products/entities/product.entity';
 import { Category } from './categories/entities/category.entity';
 import { Attribute } from './attributes/entities/attribute.entity';
 import { AttributeValue } from './attributes/entities/attribute-value.entity';
-import { ProductAttribute } from './products/entities/product-attribute.entity';
 import { CategoriesModule } from './categories/categories.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { ProductVariant } from './products/entities/product-variant.entity';
 
 @Module({
   imports: [
@@ -31,7 +31,7 @@ import { AppService } from './app.service';
         username: configService.get<string>('DATABASE_USERNAME'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Product, Attribute, AttributeValue, ProductAttribute, Category], 
+        entities: [User, Product, Attribute, AttributeValue, Category,ProductVariant,], 
         synchronize: true, 
         autoLoadEntities: true, 
       }),

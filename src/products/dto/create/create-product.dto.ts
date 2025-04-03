@@ -1,6 +1,5 @@
 import { IsNotEmpty, IsString, MaxLength, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, IsUUID, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ProductAttributeDto } from '../product-attribute.dto';
 import { CreateProductVariantDto } from './create-product-variant.dto';
 
 export class CreateProductDto {

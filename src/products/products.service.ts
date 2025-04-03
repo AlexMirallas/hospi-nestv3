@@ -6,10 +6,11 @@ import { ProductVariant } from './entities/product-variant.entity';
 import { ProductAttributeValue } from './entities/product-attribute-value.entity';
 import { CreateProductDto } from './dto/create/create-product.dto';
 import { UpdateProductDto } from './dto/update/update-product.dto';
-import { SimpleRestParams } from '../users/users.service';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
 import { Category } from '../categories/entities/category.entity';
 import { AttributeValue } from '../attributes/entities/attribute-value.entity';
 import { Attribute } from '../attributes/entities/attribute.entity';
+import { CreateProductVariantDto } from './dto/create/create-product-variant.dto';
 
 @Injectable()
 export class ProductsService {
@@ -87,7 +88,7 @@ export class ProductsService {
   /**
    * Helper method to create variants for a product
    */
-  private async createVariantsForProduct(product: Product, variantDtos: any[]): Promise<void> {
+   async createVariantsForProduct(product: Product, variantDtos: any[]): Promise<void> {
     // Get all referenced attribute values to validate
     const attributeValueIds = variantDtos.flatMap(
       variant => variant.attributeValues.map(av => av.attributeValueId)
@@ -539,6 +540,8 @@ async findPaginatedVariants(
 ): Promise<{ data: ProductVariant[]; total: number }> {
   const { start = 0, end = 9, sort = "sku", order = 'ASC', filters = {} } = params;
 
+  console.log('findPaginatedVariants received filters:', JSON.stringify(filters, null, 2));
+
   const take = end - start + 1;
   const skip = start;
 
@@ -558,6 +561,7 @@ async findPaginatedVariants(
 
               if (key === 'productId') {
                   // Filter by the product ID using the joined relation
+                  console.log(`>>> Applying productId filter with value: ${filterValue}`);
                   queryBuilder.andWhere('variant.product.id = :productId', { productId: filterValue });
                   whereParams.productId = filterValue; // Keep track if needed, though QB handles it
               }
@@ -594,6 +598,98 @@ async findPaginatedVariants(
   const [data, total] = await queryBuilder.getManyAndCount();
 
   return { data, total };
+}
+
+
+async addVariantToProduct(createVariantDto: CreateProductVariantDto): Promise<ProductVariant> {
+  const queryRunner = this.dataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    // 1. Find the parent product
+    const product = await queryRunner.manager.findOne(Product, {
+      where: { id: createVariantDto.productId },
+    });
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${createVariantDto.productId} not found.`);
+    }
+
+    // 2. Validate Attribute Values
+    const attributeValueIds = createVariantDto.attributeValues.map(av => av.attributeValueId);
+    if (new Set(attributeValueIds).size !== attributeValueIds.length) {
+      throw new BadRequestException('Duplicate attributeValueId provided for the variant.');
+    }
+
+    const attributeValues = await queryRunner.manager.find(AttributeValue, {
+      where: { id: In(attributeValueIds) },
+      relations: ['attribute'], // Need attribute for validation/association
+    });
+
+    if (attributeValues.length !== attributeValueIds.length) {
+      const foundIds = attributeValues.map(av => av.id);
+      const missingIds = attributeValueIds.filter(id => !foundIds.includes(id));
+      throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
+    }
+
+    // Optional: Check if variant with this exact combination already exists for this product
+    // This requires a more complex query joining ProductVariant and ProductAttributeValue
+    // For simplicity, we'll skip this strict check for now, but consider adding it
+    // based on business rules. You might allow duplicates if SKUs are different, etc.
+
+    // 3. Create the ProductVariant
+    const newVariant = queryRunner.manager.create(ProductVariant, {
+      sku: createVariantDto.sku,
+      priceAdjustment: createVariantDto.priceAdjustment ?? 0,
+      stockQuantity: createVariantDto.stockQuantity ?? 0,
+      isActive: createVariantDto.isActive ?? true,
+      product: product, // Link to the parent product
+    });
+
+    // Save the variant to get its ID
+    await queryRunner.manager.save(ProductVariant, newVariant);
+
+    // 4. Create ProductAttributeValue associations
+    const productAttributeValueEntities = attributeValues.map(attrValue => {
+        return queryRunner.manager.create(ProductAttributeValue, {
+            variant: newVariant, // Link to the new variant
+            attributeValue: attrValue, // Link to the specific AttributeValue (e.g., 'Red')
+            attribute: attrValue.attribute, // Link to the parent Attribute (e.g., 'Color')
+        });
+    });
+
+    // Save the associations
+    await queryRunner.manager.save(ProductAttributeValue, productAttributeValueEntities);
+
+    // 5. Commit Transaction
+    await queryRunner.commitTransaction();
+
+    // 6. Return the newly created variant (potentially reload with relations if needed)
+    // Fetching again ensures all relations are loaded as expected by the frontend
+    const createdVariant = await this.variantRepo.findOne({
+      where: { id: newVariant.id },
+      relations: [
+        'product', // Include product info if needed
+        'attributeValues',
+        'attributeValues.attributeValue',
+        'attributeValues.attribute'
+      ]
+    });
+    if(!createdVariant) {
+      // Should not happen if transaction succeeded, but good practice
+      throw new Error('Failed to retrieve created variant after transaction.');
+    }
+    return createdVariant;
+
+  } catch (error) {
+    // Rollback on error
+    await queryRunner.rollbackTransaction();
+    // Re-throw the error to be handled by NestJS exception filters
+    throw error;
+  } finally {
+    // Release the query runner
+    await queryRunner.release();
+  }
 }
 
 }

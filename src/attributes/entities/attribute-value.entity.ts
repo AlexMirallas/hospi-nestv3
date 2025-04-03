@@ -1,6 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn,OneToMany, } from 'typeorm';
 import { Attribute } from './attribute.entity';
-import { ProductAttribute } from '../../products/entities/product-attribute.entity';
 import { IsHexColor, IsOptional } from 'class-validator';
 
 @Entity('attribute_values')
@@ -25,9 +24,6 @@ export class AttributeValue {
 
   @Column({ name: 'attribute_id' }) // Store the foreign key ID
   attributeId: number;
-
-  @OneToMany(() => ProductAttribute, (pa) => pa.attributeValue)
-  productAttributes: ProductAttribute[]; // Link to join table
 
   @CreateDateColumn()
   createdAt: Date;

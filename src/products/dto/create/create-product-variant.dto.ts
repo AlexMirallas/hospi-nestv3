@@ -8,7 +8,8 @@ import {
     IsNotEmpty,
     MaxLength,
     Min,
-    ArrayNotEmpty
+    ArrayNotEmpty,
+    IsUUID,
   } from 'class-validator';
   import { Type } from 'class-transformer';
   import { AttributeValueRefDto } from '../base/attribute-value-reference.dto';
@@ -38,4 +39,8 @@ import {
     @Type(() => AttributeValueRefDto)
     @ArrayNotEmpty()
     attributeValues: AttributeValueRefDto[];
+
+    @IsNotEmpty()
+    @IsUUID() // Validate that a product ID is provided and is a UUID
+    productId: string;
   }

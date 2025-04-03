@@ -3,16 +3,14 @@ import {
   Get, 
   Post, 
   Body, 
-  Patch, 
   Param, 
   Delete, 
   UseGuards, 
   Query, 
-  DefaultValuePipe, 
-  ParseIntPipe, 
   UsePipes, 
   ValidationPipe,
-  Res 
+  Res,
+  Put 
 } from '@nestjs/common';
 import { AttributesService } from './attributes.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
@@ -86,7 +84,7 @@ export class AttributesController {
     return this.attributesService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   update(@Param('id') id: string, @Body() updateAttributeDto: UpdateAttributeDto) {
     return this.attributesService.update(+id, updateAttributeDto);
   }
@@ -160,7 +158,7 @@ export class AttributeValuesController {
     return this.attributeValuesService.findOne(+id);
   }
 
-  @Patch(':id')
+  @Put(':id')
   update(@Param('id') id: string, @Body() updateDto: UpdateAttributeValueDto) {
     return this.attributeValuesService.update(+id, updateDto);
   }

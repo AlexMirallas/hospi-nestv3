@@ -1,8 +1,14 @@
-import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors } from '@nestjs/common';
-import { ProductsService } from '../products/products.service'; // Inject ProductsService
-import { ProductVariant } from '../products/entities/product-variant.entity'; // Import type
-import { SimpleRestParams } from '../users/users.service'; // 
+import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorators'; 
+import { CreateProductVariantDto } from './dto/create/create-product-variant.dto'; 
+import { ProductsService } from '../products/products.service';
+import { ProductVariant } from '../products/entities/product-variant.entity';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
 import { SimpleRestContentRangeInterceptor, PaginatedResponse } from '../interceptors/global-interceptors'; 
+import { Role } from 'src/common/enums/role.enum';
+import { ParseSimpleRestParamsPipe } from 'src/common/pipes/parse-simple-rest.pipe';
 
 @Controller('variants')
 export class VariantsController {
@@ -10,40 +16,43 @@ export class VariantsController {
         private readonly productsService: ProductsService,
     ) {}
 
-    /**
-     * GET /variants - Find variants, filterable by productId (and potentially others)
-     * Compatible with React Admin's getList for ReferenceManyField
-     */
+    @Post() // Route: POST /products/variants
+    @UseGuards(JwtAuthGuard, RolesGuard) 
+    @Roles(Role.Admin) 
+    addVariant(
+      @Body() createVariantDto: CreateProductVariantDto, 
+    ): Promise<ProductVariant> {
+      return this.productsService.addVariantToProduct(createVariantDto);
+    }
+
+    
+    // GET /variants - Find variants, filterable by productId 
     @Get()
     @UseInterceptors(SimpleRestContentRangeInterceptor)
     async findAllVariants(
-        // Use @Query decorator to get filter, sort, pagination params
-        @Query() params: SimpleRestParams,
+        @Query(ParseSimpleRestParamsPipe) params: SimpleRestParams,
     ): Promise<PaginatedResponse<ProductVariant>> {
-        // Parse the query parameters
+        console.log('Controller received PARSED params:', JSON.stringify(params, null, 2));
         const result = await this.productsService.findPaginatedVariants(params);
 
         return result;
     }
 
-    /**
-     * GET /variants/:id - Find a single variant by its own ID
-     * Useful if you make the Datagrid rows clickable (rowClick="edit")
-     */
+    
+    // GET /variants/:id - Find a single variant by its own ID 
     @Get(':id')
     async findOneVariant(
-        @Param('id', ParseUUIDPipe) id: string // Use ParseIntPipe if variant ID is number
+        @Param('id', ParseUUIDPipe) id: string 
     ): Promise<ProductVariant> {
-        // Assuming you have a method to find a single variant by its ID
-        const variant = await this.productsService.findVariant(id); // Use the method created earlier
+        const variant = await this.productsService.findVariant(id); 
         if (!variant) {
             throw new NotFoundException(`Variant with ID ${id} not found`);
         }
         return variant;
     }
 
-    // Add POST, PATCH, DELETE endpoints here if you need to manage variants individually
-    // @Post() createVariant(...)
+
+
     // @Patch(':id') updateVariant(...)
     // @Delete(':id') removeVariant(...)
 }

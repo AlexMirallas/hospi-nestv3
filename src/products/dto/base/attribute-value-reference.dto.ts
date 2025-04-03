@@ -2,8 +2,8 @@ import { IsNotEmpty } from 'class-validator';
 
 export class AttributeValueRefDto {
   @IsNotEmpty()
-  attributeId: string;
+  attributeId: number;
 
   @IsNotEmpty()
-  attributeValueId: string;
+  attributeValueId: number;
 }

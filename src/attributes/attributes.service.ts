@@ -7,7 +7,7 @@ import { UpdateAttributeDto } from './dto/update-attribute.dto';
 import { AttributeValue } from './entities/attribute-value.entity';
 import { CreateAttributeValueDto } from './dto/create-attribute-value.dto';
 import { UpdateAttributeValueDto } from './dto/update-attribute-value.dto';
-import { SimpleRestParams } from '../users/users.service';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
 
 @Injectable()
 export class AttributesService {
