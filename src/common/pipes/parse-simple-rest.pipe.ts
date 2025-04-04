@@ -1,13 +1,13 @@
 import { PipeTransform, Injectable, ArgumentMetadata, BadRequestException } from '@nestjs/common';
 
-// Define your SimpleRestParams type clearly
+// Define SimpleRestParams
 export interface SimpleRestParams {
-  filters: Record<string, any>; // Parsed filter object
-  sort?: string;                // Sort field
-  order?: 'ASC' | 'DESC';       // Sort order
-  start?: number;               // Pagination start
-  end?: number;                 // Pagination end
-  range?: [number, number];     // Optional: keep original range array
+  filters: Record<string, any>; 
+  sort?: string;                
+  order?: 'ASC' | 'DESC';       
+  start?: number;               
+  end?: number;                 
+  range?: [number, number];     
 }
 
 
@@ -15,7 +15,6 @@ export interface SimpleRestParams {
 export class ParseSimpleRestParamsPipe implements PipeTransform<any, SimpleRestParams> {
   transform(rawParams: any, metadata: ArgumentMetadata): SimpleRestParams {
     // Log the raw input received by the pipe
-    console.log('Pipe received rawParams:', JSON.stringify(rawParams, null, 2));
 
     if (!rawParams || typeof rawParams !== 'object') {
       // Handle cases where no query params are provided or input isn't an object
@@ -73,9 +72,6 @@ export class ParseSimpleRestParamsPipe implements PipeTransform<any, SimpleRestP
         throw new BadRequestException('Invalid JSON format for range parameter. Expected [start, end].');
       }
     }
-
-    // Log the final parsed object just before returning
-    console.log('Pipe is returning parsed params:', JSON.stringify(parsed, null, 2));
 
     // Return the *newly constructed object* with parsed values
     return parsed;

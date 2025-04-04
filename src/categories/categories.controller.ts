@@ -21,6 +21,8 @@ import { Roles } from '../common/decorators/roles.decorators';
 import { Role } from '../common/enums/role.enum';
 import { Category } from './entities/category.entity';
 import { Response } from 'express';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
+import { ParseSimpleRestParamsPipe } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the import path as necessary
 
 @Controller('categories')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -96,5 +98,11 @@ export class CategoriesController {
   @Roles(Role.Admin)
   remove(@Param('id') id: string) {
     return this.categoriesService.remove(+id);
+  }
+
+  @Get('stats') // Using a distinct path for clarity
+  @UsePipes(ParseSimpleRestParamsPipe) // Use the pipe to parse query params
+  findWithCount(@Query() params: SimpleRestParams) {
+    return this.categoriesService.findWithProductCount(params);
   }
 }

@@ -3,8 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsOrder, FindOptionsWhere, In } from 'typeorm';
 import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
-import { UpdateCategoryDto } from './dto/update-category.dto';
-import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the path as necessary
+import { UpdateCategoryDto,CategoryWithProductCount } from './dto/update-category.dto';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
 
 @Injectable()
 export class CategoriesService {
@@ -126,5 +126,73 @@ export class CategoriesService {
     
     // Return the tree structure
     return rootCategories;
+  }
+
+  async findWithProductCount(
+    params: SimpleRestParams,
+  ): Promise<{ data: CategoryWithProductCount[]; total: number }> {
+    const { start = 0, end = 9, sort = 'name', order = 'ASC', filters = {} } = params;
+
+    const take = end - start + 1;
+    const skip = start;
+
+    const queryBuilder = this.repo.createQueryBuilder('category');
+    queryBuilder.leftJoin('category.products', 'product');
+
+    // Select category fields explicitly + the count
+    queryBuilder.select([
+        'category.id',
+        'category.name',
+        'category.slug',
+        'category.description',
+        'category.parentId', 
+        'category.createdAt',
+        'category.updatedAt',
+    ]);
+    queryBuilder.addSelect('COUNT(product.id)', 'productCount'); // Count products
+
+    // Apply filters (Example: filter by name)
+    if (filters.name) {
+      queryBuilder.andWhere('category.name ILIKE :name', { name: `%${filters.name}%` });
+    }
+    if (filters.slug) {
+        queryBuilder.andWhere('category.slug = :slug', { slug: filters.slug });
+    }
+    
+    // PostgreSQL requires all selected non-aggregated columns in GROUP BY
+    queryBuilder.groupBy('category.id');
+
+
+    // sorting
+    const sortField = sort === 'productCount' ? 'productCount' : `category.${sort}`;
+    if (this.repo.metadata.hasColumnWithPropertyPath(sort) || sort === 'productCount') {
+        queryBuilder.orderBy(sortField, order.toUpperCase() as 'ASC' | 'DESC');
+    } else {
+        queryBuilder.orderBy('category.name', 'ASC'); // Default sort
+    }
+
+    // Apply pagination
+    queryBuilder.offset(skip).limit(take);
+
+    // Execute query to get raw results and total count
+    const [rawResults, total] = await queryBuilder.getRawMany();
+
+   
+    const data = rawResults.map(raw => ({
+        id: raw.category_id,
+        name: raw.category_name,
+        slug: raw.category_slug,
+        description: raw.category_description,
+        parentId: raw.category_parentId,
+        createdAt: raw.category_createdAt,
+        updatedAt: raw.category_updatedAt,
+        productCount: parseInt(raw.productCount, 10) || 0,
+        children: [], 
+        parent: null, 
+        products: [], 
+    }));
+
+
+    return { data, total };
   }
 }

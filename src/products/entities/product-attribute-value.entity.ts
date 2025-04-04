@@ -25,11 +25,11 @@ import {
     @JoinColumn({ name: 'variant_id' })
     variant: ProductVariant;
   
-    @ManyToOne(() => AttributeValue, { nullable: false })
+    @ManyToOne(() => AttributeValue, { nullable: false, eager: false })
     @JoinColumn({ name: 'attribute_value_id' })
     attributeValue: AttributeValue;
   
-    @ManyToOne(() => Attribute, { nullable: false })
+    @ManyToOne(() => Attribute, { nullable: false, eager: false })
     @JoinColumn({ name: 'attribute_id' })
     @Index()
     attribute: Attribute;

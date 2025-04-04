@@ -1,4 +1,3 @@
-// src/categories/entities/category.entity.ts
 import {
     Entity,
     PrimaryGeneratedColumn,
@@ -15,7 +14,7 @@ import {
   import { Product } from '../../products/entities/product.entity';
   
   @Entity('categories')
-  @Tree('materialized-path') // Or 'closure-table' or 'nested-set'. Materialized path is often simpler.
+  @Tree('materialized-path') // Using materialized path for tree structure
   export class Category {
     @PrimaryGeneratedColumn()
     id: number;
@@ -35,10 +34,10 @@ import {
     @TreeChildren()
     children: Category[];
   
-    @TreeParent({ onDelete: 'SET NULL' }) // If parent is deleted, children become top-level
+    @TreeParent({ onDelete: 'SET NULL' }) // Set to null if parent is deleted
     parent: Category | null;
   
-    // Store parentId explicitly if needed for easier querying without loading the full parent object
+    
     @Column({ nullable: true })
     parentId: number | null;
     // --- End Hierarchy ---
@@ -46,10 +45,8 @@ import {
   
     // --- Many-to-Many with Product ---
     @ManyToMany(() => Product, (product) => product.categories)
-    // Define the join table details (optional but recommended for clarity)
-    // TypeORM default would be category_products_product
     @JoinTable({
-      name: 'product_categories', // Explicitly name the junction table
+      name: 'product_categories', //  junction table
       joinColumn: { // Column for the owning side (Category)
         name: 'category_id',
         referencedColumnName: 'id',
@@ -59,8 +56,8 @@ import {
         referencedColumnName: 'id',
       },
     })
-    products: Product[]; // Relation defined here
-    // --- End Many-to-Many ---
+    products: Product[]; 
+  
   
     @CreateDateColumn()
     createdAt: Date;

@@ -1,8 +1,9 @@
-import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards, Put } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators'; 
-import { CreateProductVariantDto } from './dto/create/create-product-variant.dto'; 
+import { CreateProductVariantDto } from './dto/create/create-product-variant.dto';
+import { UpdateProductVariantDto } from './dto/update/update-product-variant.dto'; 
 import { ProductsService } from '../products/products.service';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
@@ -32,7 +33,6 @@ export class VariantsController {
     async findAllVariants(
         @Query(ParseSimpleRestParamsPipe) params: SimpleRestParams,
     ): Promise<PaginatedResponse<ProductVariant>> {
-        console.log('Controller received PARSED params:', JSON.stringify(params, null, 2));
         const result = await this.productsService.findPaginatedVariants(params);
 
         return result;
@@ -41,6 +41,8 @@ export class VariantsController {
     
     // GET /variants/:id - Find a single variant by its own ID 
     @Get(':id')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.Admin)
     async findOneVariant(
         @Param('id', ParseUUIDPipe) id: string 
     ): Promise<ProductVariant> {
@@ -53,6 +55,16 @@ export class VariantsController {
 
 
 
-    // @Patch(':id') updateVariant(...)
+    @Put(':variantId') 
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.Admin) 
+    @UseInterceptors(SimpleRestContentRangeInterceptor) 
+    updateVariant(
+        @Param('variantId', ParseUUIDPipe) variantId: string, 
+        @Body() updateVariantDto: UpdateProductVariantDto,    
+  ) {
+    console.log('Updating variant with ID:', variantId, 'with data:', updateVariantDto);
+    return this.productsService.updateVariant(variantId, updateVariantDto);
+  }
     // @Delete(':id') removeVariant(...)
 }
