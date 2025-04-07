@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException,InternalServerErrorException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository, } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductVariant } from './entities/product-variant.entity';
@@ -36,13 +36,12 @@ export class ProductsService {
    * Create a product with variants
    */
   async create(createProductDto: CreateProductDto): Promise<Product> {
-    // Start a transaction
+    
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      // 1. Create the base product
       const product = this.productRepo.create({
         sku: createProductDto.sku,
         name: createProductDto.name,
@@ -51,7 +50,6 @@ export class ProductsService {
         isActive: createProductDto.isActive ?? true
       });
 
-      // 2. Add categories if provided
       if (createProductDto.categoryIds && createProductDto.categoryIds.length > 0) {
         const categories = await this.categoryRepository.findBy({
           id: In(createProductDto.categoryIds)
@@ -64,7 +62,7 @@ export class ProductsService {
         product.categories = categories;
       }
 
-      // 3. Save the base product first
+      // 3. Save the base product 
       await this.productRepo.save(product);
 
       // 4. Create variants if provided
@@ -96,22 +94,22 @@ export class ProductsService {
       variant => variant.attributeValues.map(av => av.attributeValueId)
     );
     
-    // Fetch all attribute values at once
+    
     const attributeValues = await this.attributeValueBaseRepo.find({
       where: { id: In(attributeValueIds) },
-      relations: ['attribute']
+      relations: {attribute: true}
     });
 
     if (attributeValues.length !== new Set(attributeValueIds).size) {
       throw new BadRequestException('One or more attribute values not found');
     }
 
-    // Create a map for quick lookup
+    
     const attributeValueMap = new Map(
       attributeValues.map(av => [av.id, av])
     );
 
-    // Required attributes for this product (defined by what's used in variants)
+    
     const requiredAttributeIds = new Set(
       attributeValues.map(av => av.attribute.id)
     );
@@ -254,13 +252,15 @@ export class ProductsService {
   async findOne(id: string): Promise<Product> {
     const product = await this.productRepo.findOne({ 
       where: { id },
-      relations: [
-        'categories', 
-        'variants',
-        'variants.attributeValues',
-        'variants.attributeValues.attributeValue', 
-        'variants.attributeValues.attribute'
-      ] 
+      relations: {
+        categories : true,
+        variants: {
+          attributeValues: {
+            attributeValue: true,
+            attribute: true
+          }
+        }
+      }
     });
     
     if (!product) {
@@ -283,7 +283,10 @@ export class ProductsService {
     try {
       const product = await this.productRepo.findOne({
         where: { id },
-        relations: ['categories', 'variants']
+        relations: {
+          categories: true,
+          variants: true,
+        }
       });
 
       if (!product) {
@@ -404,14 +407,16 @@ export class ProductsService {
     // Load current attribute values
     const currentAttributeValues = await this.attributeValueRepo.find({
       where: { variant: { id: variant.id } },
-      relations: ['attributeValue', 'attribute']
+      relations: {
+        attributeValue: true,
+        attribute: true}
     });
     
     // Get all attribute values referenced
     const attributeValueIds = attributeValueDtos.map(av => av.attributeValueId);
     const attributeValues = await this.attributeValueBaseRepo.find({
       where: { id: In(attributeValueIds) },
-      relations: ['attribute']
+      relations: {attribute: true}
     });
     
     const attributeValueMap = new Map(attributeValues.map(av => [av.id, av]));
@@ -433,7 +438,7 @@ export class ProductsService {
     // Fetch all attribute values at once
     const attributeValues = await this.attributeValueBaseRepo.find({
       where: { id: In(attributeValueIds) },
-      relations: ['attribute']
+      relations: {attribute: true}
     });
     
     if (attributeValues.length !== attributeValueIds.length) {
@@ -479,12 +484,13 @@ export class ProductsService {
   async findVariant(id: string): Promise<ProductVariant> {
     const variant = await this.variantRepo.findOne({
       where: { id },
-      relations: [
-        'product',
-        'attributeValues',
-        'attributeValues.attributeValue',
-        'attributeValues.attribute'
-      ]
+      relations: {
+        product : true,
+        attributeValues: {
+          attributeValue: true,
+          attribute: true
+        },
+      }
     });
     
     if (!variant) {
@@ -503,318 +509,232 @@ export class ProductsService {
     return this.variantRepo.save(variant);
   }
 
-  // return variants for a product 
+  /**
+   * Find all variants for a given product ID
+   */
 
   async findVariantsByProductId(productId: string): Promise<ProductVariant[]> {
-    // Optional: Check if the product actually exists first
     const productExists = await this.productRepo.findOneBy({ id: productId });
     if (!productExists) {
       throw new NotFoundException(`Product with ID ${productId} not found.`);
     }
 
-    // Find all variants where the relation 'product.id' matches the given productId
+   
     const variants = await this.variantRepo.find({
       where: {
-        product: { id: productId }, // Filter by the nested product ID through the relation
+        product: { id: productId }, 
       },
-      relations: [
-        // Specify relations needed to populate variant details for the frontend
-        'attributeValues',                    // The join entity ProductAttributeValue
-        'attributeValues.attributeValue',     // The actual AttributeValue entity (e.g., 'Red', 'S')
-        'attributeValues.attributeValue.attribute', // The parent Attribute entity ('Color', 'Size') - useful for display text
-        'attributeValues.attribute',          // The Attribute entity directly linked in ProductAttributeValue (if you added it)
-      ],
+      relations: {
+        attributeValues :{
+          attribute: true,
+          attributeValue: {
+            attribute: true,
+          }
+        }                         
+      },
       order: {
-        // Optional 
-        sku: 'ASC',
-        // id: 'ASC'
+        sku: 'ASC', // Default order by SKU
       },
     });
-
-    // It's okay to return an empty array if a product exists but has no variants.
-    // No need to throw NotFoundException here unless the product itself wasn't found (handled above).
     return variants;
   }
   
 
-async findPaginatedVariants(
-  params: SimpleRestParams,
-): Promise<{ data: ProductVariant[]; total: number }> {
-  const { start = 0, end = 9, sort = "sku", order = 'ASC', filters = {} } = params;
+  async findPaginatedVariants(
+    params: SimpleRestParams,
+  ): Promise<{ data: ProductVariant[]; total: number }> {
+    const { start = 0, end = 9, sort = "sku", order = 'ASC', filters = {} } = params;
 
-  const take = end - start + 1;
-  const skip = start;
+    const take = end - start + 1;
+    const skip = start;
 
-  // Start QueryBuilder for ProductVariant
-  const queryBuilder = this.variantRepo.createQueryBuilder('variant')
-      .leftJoinAndSelect('variant.product', 'product') 
-      .leftJoinAndSelect('variant.attributeValues', 'pav')
-      .leftJoinAndSelect('pav.attributeValue', 'attrValue')
-      .leftJoinAndSelect('pav.attribute', 'attr'); 
+    // Start QueryBuilder for ProductVariant
+    const queryBuilder = this.variantRepo.createQueryBuilder('variant')
+        .leftJoinAndSelect('variant.product', 'product') 
+        .leftJoinAndSelect('variant.attributeValues', 'pav')
+        .leftJoinAndSelect('pav.attributeValue', 'attrValue')
+        .leftJoinAndSelect('pav.attribute', 'attr'); 
 
-  // --- Filtering ---
-  const whereParams: { [key: string]: any } = {};
-  if (filters) {
-      for (const key in filters) {
-          if (Object.prototype.hasOwnProperty.call(filters, key) && filters[key] !== undefined && filters[key] !== null) {
-              const filterValue = filters[key];
+    // --- Filtering ---
+    const whereParams: { [key: string]: any } = {};
+    if (filters) {
+        for (const key in filters) {
+            if (Object.prototype.hasOwnProperty.call(filters, key) && filters[key] !== undefined && filters[key] !== null) {
+                const filterValue = filters[key];
 
-              if (key === 'productId') {
-                  // Filter by the product ID using the joined relation
-                  console.log(`>>> Applying productId filter with value: ${filterValue}`);
-                  queryBuilder.andWhere('variant.product.id = :productId', { productId: filterValue });
-                  whereParams.productId = filterValue; // Keep track if needed, though QB handles it
-              }
-              // Add other variant-specific filters here if needed (e.g., filter by SKU)
-              else if (key === 'sku') {
-                   queryBuilder.andWhere('variant.sku ILIKE :sku', { sku: `%${filterValue}%` });
-              }
-              // Handle variant ID filter (e.g., for getMany)
-              else if (key === 'id' && Array.isArray(filterValue) && filterValue.length > 0) {
-                   queryBuilder.andWhere('variant.id IN (:...variantIds)', { variantIds: filterValue });
-              }
-              // ... add more filters as necessary ...
-              else {
-                  console.warn(`VariantsService: Ignoring unknown filter key: ${key}`);
-              }
-          }
-      }
-  }
+                if (key === 'productId') {
+                    console.log(`>>> Applying productId filter with value: ${filterValue}`);
+                    queryBuilder.andWhere('variant.product.id = :productId', { productId: filterValue });
+                    whereParams.productId = filterValue; 
+                }
 
-  // --- Sorting ---
-  if (this.variantRepo.metadata.hasColumnWithPropertyPath(sort)) {
-       queryBuilder.orderBy(`variant.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
-  } else {
-       queryBuilder.orderBy('variant.sku', 'ASC'); // Default sort
-  }
+                else if (key === 'sku') {
+                     queryBuilder.andWhere('variant.sku ILIKE :sku', { sku: `%${filterValue}%` });
+                }
 
+                else if (key === 'id' && Array.isArray(filterValue) && filterValue.length > 0) {
+                     queryBuilder.andWhere('variant.id IN (:...variantIds)', { variantIds: filterValue });
+                }
 
-  // --- Pagination ---
-  queryBuilder.skip(skip).take(take);
-
-  // --- Execution ---
-  const [data, total] = await queryBuilder.getManyAndCount();
-
-  return { data, total };
-}
-
-
-async addVariantToProduct(createVariantDto: CreateProductVariantDto): Promise<ProductVariant> {
-  const queryRunner = this.dataSource.createQueryRunner();
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
-
-  try {
-    // 1. Find the parent product
-    const product = await queryRunner.manager.findOne(Product, {
-      where: { id: createVariantDto.productId },
-    });
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${createVariantDto.productId} not found.`);
-    }
-
-    // 2. Validate Attribute Values
-    const attributeValueIds = createVariantDto.attributeValues.map(av => av.attributeValueId);
-    if (new Set(attributeValueIds).size !== attributeValueIds.length) {
-      throw new BadRequestException('Duplicate attributeValueId provided for the variant.');
-    }
-
-    const attributeValues = await queryRunner.manager.find(AttributeValue, {
-      where: { id: In(attributeValueIds) },
-      relations: ['attribute'], // Need attribute for validation/association
-    });
-
-    if (attributeValues.length !== attributeValueIds.length) {
-      const foundIds = attributeValues.map(av => av.id);
-      const missingIds = attributeValueIds.filter(id => !foundIds.includes(id));
-      throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
-    }
-
-    // Optional: Check if variant with this exact combination already exists for this product
-    // based on business rules. You might allow duplicates if SKUs are different, etc.
-
-    // 3. Create the ProductVariant
-    const newVariant = queryRunner.manager.create(ProductVariant, {
-      sku: createVariantDto.sku,
-      priceAdjustment: createVariantDto.priceAdjustment ?? 0,
-      stockQuantity: createVariantDto.stockQuantity ?? 0,
-      isActive: createVariantDto.isActive ?? true,
-      product: product, 
-    });
-
-    // Save the variant to get its ID
-    await queryRunner.manager.save(ProductVariant, newVariant);
-
-    // 4. Create ProductAttributeValue associations
-    const productAttributeValueEntities = attributeValues.map(attrValue => {
-        return queryRunner.manager.create(ProductAttributeValue, {
-            variant: newVariant, 
-            attributeValue: attrValue, 
-            attribute: attrValue.attribute, 
-        });
-    });
-
-    // Save the associations
-    await queryRunner.manager.save(ProductAttributeValue, productAttributeValueEntities);
-
-    // 5. Commit Transaction
-    await queryRunner.commitTransaction();
-
-    // 6. Return the newly created variant (potentially reload with relations if needed)
-    // Fetching again ensures all relations are loaded as expected by the frontend
-    const createdVariant = await this.variantRepo.findOne({
-      where: { id: newVariant.id },
-      relations: [
-        'product', // Include product info if needed
-        'attributeValues',
-        'attributeValues.attributeValue',
-        'attributeValues.attribute'
-      ]
-    });
-    if(!createdVariant) {
-      // Should not happen if transaction succeeded, but good practice
-      throw new Error('Failed to retrieve created variant after transaction.');
-    }
-    return createdVariant;
-
-  } catch (error) {
-    // Rollback on error
-    await queryRunner.rollbackTransaction();
-    throw error;
-  } finally {
-    // Release the query runner
-    await queryRunner.release();
-  }
-}
-async updateVariant(
-  variantId: string,
-  updateDto: UpdateProductVariantDto,
-): Promise<ProductVariant> {
-  // Start a transaction
-  const queryRunner = this.dataSource.createQueryRunner();
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
-
-  try {
-    // 1. Find the existing variant with its current attributes
-    const variant = await queryRunner.manager.findOne(ProductVariant, {
-      where: { id: variantId },
-      relations: [
-        'attributeValues', // Load the link entities
-        'attributeValues.attribute', // Need the attribute ID/name for validation
-      ],
-    });
-
-    if (!variant) {
-      throw new NotFoundException(`Product variant with ID ${variantId} not found`);
-    }
-
-    // 2. Update basic variant fields if provided
-    if (updateDto.sku !== undefined) variant.sku = updateDto.sku;
-    if (updateDto.priceAdjustment !== undefined) variant.priceAdjustment = updateDto.priceAdjustment;
-    if (updateDto.stockQuantity !== undefined) variant.stockQuantity = updateDto.stockQuantity;
-    if (updateDto.isActive !== undefined) variant.isActive = updateDto.isActive;
-
-    // 3. Handle attribute value updates if provided
-    if (updateDto.attributeValues) {
-      // --- Validation ---
-      const currentAttributeIds = new Set(
-        variant.attributeValues.map((av) => av.attribute.id),
-      );
-      const updateAttributeIds = new Set(
-        updateDto.attributeValues.map((av) => av.attributeId),
-      );
-
-      // Check if the update attempts to change the *set* of attributes (usually not allowed)
-      if (currentAttributeIds.size !== updateAttributeIds.size ||
-          ![...currentAttributeIds].every(id => updateAttributeIds.has(id))) {
-        throw new BadRequestException(
-          'Update must provide values for the exact same set of attributes currently assigned to the variant.',
-        );
-      }
-
-      // --- Process Updates ---
-      const newAttributeValueIds = updateDto.attributeValues.map(av => av.attributeValueId);
-
-      // Fetch all the *new* AttributeValue entities to be linked
-      const newAttributeValues = await queryRunner.manager.find(AttributeValue, {
-          where: { id: In(newAttributeValueIds) },
-          relations: ['attribute'], // Include attribute relation
-      });
-
-      // Validate that all requested new AttributeValue entities were found
-      if (newAttributeValues.length !== newAttributeValueIds.length) {
-           const foundIds = newAttributeValues.map(v => v.id);
-           const missingIds = newAttributeValueIds.filter(id => !foundIds.includes(id));
-          throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
-      }
-
-       // Create a map for easy lookup of new values
-      const newValueMap = new Map(newAttributeValues.map(v => [v.id, v]));
-
-       // Validate that the selected value belongs to the correct attribute
-      for (const dtoValue of updateDto.attributeValues) {
-          const newValue = newValueMap.get(dtoValue.attributeValueId);
-          if (newValue?.attribute.id !== dtoValue.attributeId) {
-              throw new BadRequestException(`AttributeValue ID ${dtoValue.attributeValueId} does not belong to Attribute ID ${dtoValue.attributeId}.`);
-          }
-      }
-
-      // Remove *all* old ProductAttributeValue links for this variant
-      await queryRunner.manager.delete(ProductAttributeValue, {
-        variant: { id: variantId },
-      });
-
-      // Create new ProductAttributeValue links
-      const newLinks = updateDto.attributeValues.map((dtoValue) => {
-        const correspondingValue = newValueMap.get(dtoValue.attributeValueId);
-        if (!correspondingValue) {
-            // Should not happen due to earlier checks, but safety first
-            throw new InternalServerErrorException(`Failed to find validated AttributeValue ${dtoValue.attributeValueId}`);
+                else {
+                    console.warn(`VariantsService: Ignoring unknown filter key: ${key}`);
+                }
+            }
         }
-        return queryRunner.manager.create(ProductAttributeValue, {
-          variant: variant, 
-          attributeValue: correspondingValue, 
-          attribute: correspondingValue.attribute, 
-        });
+    }
+
+    // --- Sorting ---
+    if (this.variantRepo.metadata.hasColumnWithPropertyPath(sort)) {
+         queryBuilder.orderBy(`variant.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
+    } else {
+         queryBuilder.orderBy('variant.sku', 'ASC'); // Default sort
+    }
+
+
+    // --- Pagination ---
+    queryBuilder.skip(skip).take(take);
+
+    // --- Execution ---
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return { data, total };
+  }
+
+
+  async addVariantToProduct(createVariantDto: CreateProductVariantDto): Promise<ProductVariant> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const product = await queryRunner.manager.findOne(Product, {
+        where: { id: createVariantDto.productId },
+      });
+      if (!product) {
+        throw new NotFoundException(`Product with ID ${createVariantDto.productId} not found.`);
+      }
+
+      const attributeValueIds = createVariantDto.attributeValues.map(av => av.attributeValueId);
+      if (new Set(attributeValueIds).size !== attributeValueIds.length) {
+        throw new BadRequestException('Duplicate attributeValueId provided for the variant.');
+      }
+
+      const attributeValues = await queryRunner.manager.find(AttributeValue, {
+        where: { id: In(attributeValueIds) },
+        relations: {attribute : true} 
       });
 
-      // Save the new link entities
-      await queryRunner.manager.save(ProductAttributeValue, newLinks);
+      if (attributeValues.length !== attributeValueIds.length) {
+        const foundIds = attributeValues.map(av => av.id);
+        const missingIds = attributeValueIds.filter(id => !foundIds.includes(id));
+        throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
+      }
+
+      // For future reference here check if variant exists? Based on bussiness logic
+      // refuse to create a variant that already exists for the product. Bon Courage et Hala Madrid!
+
+
+      const newVariant = queryRunner.manager.create(ProductVariant, {
+        sku: createVariantDto.sku,
+        priceAdjustment: createVariantDto.priceAdjustment ?? 0,
+        stockQuantity: createVariantDto.stockQuantity ?? 0,
+        isActive: createVariantDto.isActive ?? true,
+        product: product, 
+      });
+
+
+      await queryRunner.manager.save(ProductVariant, newVariant);
+
+
+      const productAttributeValueEntities = attributeValues.map(attrValue => {
+          return queryRunner.manager.create(ProductAttributeValue, {
+              variant: newVariant, 
+              attributeValue: attrValue, 
+              attribute: attrValue.attribute, 
+          });
+      });
+
+      await queryRunner.manager.save(ProductAttributeValue, productAttributeValueEntities);
+
+      await queryRunner.commitTransaction();
+
+      const createdVariant = await this.variantRepo.findOne({
+        where: { id: newVariant.id },
+        relations: {
+          product: true,
+          attributeValues: {
+            attributeValue: true,
+            attribute: true
+          }, 
+        }
+      });
+      if(!createdVariant) {
+        throw new Error('Failed to retrieve created variant after transaction.');
+      }
+      return createdVariant;
+
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    // 4. Save the updated variant entity itself (with updated basic fields)
-    await queryRunner.manager.save(ProductVariant, variant);
-
-    // 5. Commit the transaction
-    await queryRunner.commitTransaction();
-
-    // 6. Return the fully updated variant (refetch with relations)
-    const updatedVariant = await this.variantRepo.findOne({
-        where: { id: variantId },
-        relations: [
-            'product',
-            'attributeValues',
-            'attributeValues.attributeValue',
-            'attributeValues.attribute'
-        ]
-    });
-
-    if (!updatedVariant) {
-        // Should not happen if transaction succeeded, but good practice
-        throw new InternalServerErrorException('Failed to retrieve updated variant after transaction.');
-    }
-    return updatedVariant;
-
-  } catch (error) {
-    // Rollback transaction on error
-    await queryRunner.rollbackTransaction();
-    // Re-throw the error to be handled by NestJS exception filters
-    throw error;
-  } finally {
-    // Release the query runner
-    await queryRunner.release();
   }
-}
+
+  /**
+   * Update a product variant
+   */
+  async updateVariant(id: string, updateVariantDto: UpdateProductVariantDto): Promise<ProductVariant> {
+    const variant = await this.findVariant(id);
+    
+    if (!variant) {
+      throw new NotFoundException(`Product variant with ID ${id} not found`);
+    }
+
+    if (updateVariantDto.sku) variant.sku = updateVariantDto.sku;
+    if (updateVariantDto.priceAdjustment !== undefined) variant.priceAdjustment = updateVariantDto.priceAdjustment;
+    if (updateVariantDto.stockQuantity !== undefined) variant.stockQuantity = updateVariantDto.stockQuantity;
+    if (updateVariantDto.isActive !== undefined) variant.isActive = updateVariantDto.isActive;
+
+    if (updateVariantDto.attributeValues) {
+      const attributeValueIds = updateVariantDto.attributeValues.map(av => av.attributeValueId);
+      const attributeValues = await this.attributeValueBaseRepo.find({
+        where: { id: In(attributeValueIds) },
+        relations: {attribute: true}
+      });
+
+      const attributeValueMap = new Map(attributeValues.map(av => [av.id, av]));
+      const attributeValueEntities: ProductAttributeValue[] = [];
+      
+      for (const av of updateVariantDto.attributeValues) {
+        const attributeValue = attributeValueMap.get(av.attributeValueId);
+        if (!attributeValue) {
+          throw new BadRequestException(`Attribute value ${av.attributeValueId} not found`);
+        }
+        const productAttributeValue = this.attributeValueRepo.create({
+          variant: variant,
+          attributeValue: attributeValue,
+          attribute: attributeValue.attribute
+        });
+        attributeValueEntities.push(productAttributeValue);
+      }
+
+      await this.attributeValueRepo.remove(variant.attributeValues);
+      variant.attributeValues = attributeValueEntities;
+      if (attributeValueEntities.length > 0) {
+        await this.attributeValueRepo.save(attributeValueEntities);
+      }
+    }
+
+    return this.variantRepo.save(variant);
+
+  }
+  /**
+   * Delete a product variant by ID
+   */
+  async removeVariant(id: string): Promise<void> {
+    const variant = await this.findVariant(id);
+    await this.variantRepo.remove(variant);
+  }
 
 }

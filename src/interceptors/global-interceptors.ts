@@ -54,7 +54,7 @@ import {
   
           // If result is not in PaginatedResponse format, pass it through unchanged
           // This handles cases where the endpoint returns just an array or a single object
-          return result as T[]; // Needs careful type handling if result could be non-array
+          return result as T[]; 
         }),
       );
     }

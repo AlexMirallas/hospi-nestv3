@@ -4,12 +4,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
-import { UsersModule } from '../users/users.module'; // Import UsersModule
+import { UsersModule } from '../users/users.module'; 
 import { JwtStrategy } from './strategies/jwt.strategy';
 
 @Module({
   imports: [
-    UsersModule, // Import UsersModule to use UsersService
+    UsersModule, 
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -21,10 +21,10 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       }),
       inject: [ConfigService],
     }),
-    ConfigModule, // Ensure ConfigModule is available if not global
+    ConfigModule, 
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy], // Register JwtStrategy
-  exports: [AuthService, JwtModule, PassportModule], // Export if needed elsewhere
+  providers: [AuthService, JwtStrategy], 
+  exports: [AuthService, JwtModule, PassportModule], 
 })
 export class AuthModule {}

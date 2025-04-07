@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, FindOptionsOrder,FindOptionsWhere,In } from 'typeorm';
+import { Repository, FindOptionsOrder,FindOptionsWhere,In,ILike } from 'typeorm';
 import { Attribute } from './entities/attribute.entity';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
 import { UpdateAttributeDto } from './dto/update-attribute.dto';
@@ -26,66 +26,61 @@ export class AttributesService {
   ): Promise<{ data: Attribute[]; totalCount: number }> {
     const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
   
-    // Calculate TypeORM pagination options
+   
     const take = end - start + 1;
     const skip = start;
   
-    // Build TypeORM sorting options
+    
     const orderOptions: FindOptionsOrder<Attribute> = {};
     if (sort) {
       if (this.repo.metadata.hasColumnWithPropertyPath(sort)) {
         orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
       } else {
         console.warn(`Ignoring invalid sort field: ${sort}`);
-        // Default sort if invalid
+        
         orderOptions['id'] = 'ASC';
       }
     } else {
-      // Default sort
+      // Default Hala Madrid sort
       orderOptions['id'] = 'ASC';
     }
-  
-    // Build TypeORM where options for filtering
+    
     const whereOptions: FindOptionsWhere<Attribute> | FindOptionsWhere<Attribute>[] = {};
 
-    // Process filter object
     if (filters) {
       for (const key in filters) {
-          if (key === 'id') { // <--- SPECIAL HANDLING FOR ID FILTER
-              const ids = filters[key]; // This will be [4] in the error case
+          if (key === 'id') { 
+              const ids = filters[key]; 
               if (Array.isArray(ids) && ids.length > 0) {
-                  // Ensure they are numbers (or strings if UUIDs) before passing to IN
-                  // Adjust parseInt based on your actual ID type (number vs string/UUID)
                   const numericIds = ids.map(id => parseInt(id, 10)).filter(id => !isNaN(id));
                   if (numericIds.length > 0) {
-                     whereOptions[key] = In(numericIds); // <--- USE 'In' OPERATOR
+                     whereOptions[key] = In(numericIds); 
                   } else {
-                      // Prevent query with invalid filter from running broadly
-                     whereOptions[key] = In([-1]); // Pass impossible value if conversion fails
+                     whereOptions[key] = In([-1]);
                   }
               } else if (!isNaN(parseInt(ids, 10))) {
-                  // Handle case where filter might be passed as single ID: filter={"id": 4}
                   whereOptions[key] = parseInt(ids, 10);
               } else {
-                  // Invalid ID format, prevent broad query
-                  whereOptions[key] = In([-1]); // Pass impossible value
+                  whereOptions[key] = In([-1]); 
               }
-          } else if (/* other specific filters like name_like, etc. */ false ) {
-               // Handle other filters (e.g., using Like() operator)
+          } else if ( false ) {
+               // Other filtres in the future if you want. Hala Madrid!
           }
            else {
-              // Default simple equality for other fields (if applicable)
+              // Default 
               whereOptions[key] = filters[key];
           }
       }
   }
-    // Fetch data and total count with relations
+
     const [data, totalCount] = await this.repo.findAndCount({
       where: whereOptions,
       order: orderOptions,
       take: take,
       skip: skip,
-      relations: ['values'], // Include attribute values
+      relations: {
+        values: true, 
+      }, 
     });
   
     return { data, totalCount };
@@ -94,7 +89,9 @@ export class AttributesService {
   async findOne(id: number): Promise<Attribute> {
     const attribute = await this.repo.findOne({ 
       where: { id },
-      relations: ['values']
+      relations: {
+        values: true, 
+      }
     });
     
     if (!attribute) {
@@ -140,17 +137,16 @@ export class AttributeValuesService {
     const take = end - start + 1;
     const skip = start;
 
-    // Build TypeORM sorting options
+   
     const orderOptions: FindOptionsOrder<AttributeValue> = {};
-    // Basic check: refine if you need related field sorting (QueryBuilder is better for that)
-    if (sort && (this.repo.metadata.hasColumnWithPropertyPath(sort) || sort === 'id')) {
+    if (sort && (this.repo.metadata.hasColumnWithPropertyPath(sort) || sort === 'position')) {
       orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
     } else {
       console.warn(`findAllSimpleRest (AttributeValue): Ignoring invalid sort field '${sort}', defaulting to 'id ASC'.`);
       orderOptions['id'] = 'ASC'; // Default sort
     }
 
-    // Build TypeORM where options carefully
+    
     const whereOptions: FindOptionsWhere<AttributeValue> = {};
 
     for (const key in filters) {
@@ -158,49 +154,41 @@ export class AttributeValuesService {
         Object.prototype.hasOwnProperty.call(filters, key) &&
         filters[key] !== undefined &&
         filters[key] !== null &&
-        filters[key] !== '' // Often useful to ignore empty string filters
+        filters[key] !== '' 
       ) {
         const filterValue = filters[key];
 
-        // --- Specific Handling for ID Filter ---
-        if (key === 'id') {
-          // If react-admin sends an array for getMany
+        
+        if (key === 'id') { 
           if (Array.isArray(filterValue) && filterValue.length > 0) {
-             // Ensure values are of the correct type (e.g., number if ID is integer)
              const parsedIds = filterValue.map(id => parseInt(String(id), 10)).filter(id => !isNaN(id));
              if (parsedIds.length > 0) {
-                 whereOptions.id = In(parsedIds); // Use TypeORM's In operator
+                 whereOptions.id = In(parsedIds); 
              }
           }
-          // If react-admin sends a single value for filtering
           else if (!Array.isArray(filterValue)) {
               const parsedId = parseInt(String(filterValue), 10);
               if(!isNaN(parsedId)) {
-                  whereOptions.id = parsedId; // Assign the primitive number
+                  whereOptions.id = parsedId; 
               } else {
                    console.warn(`findAllSimpleRest (AttributeValue): Invalid non-numeric ID filter value ignored: ${filterValue}`);
               }
           }
-          // Ignore empty arrays or other invalid formats
+          
         }
-        // --- Specific Handling for attributeId Filter (if used) ---
-        // Assumes 'attributeId' is the filter key from frontend, and maps to 'attribute' relation ID
+
         else if (key === 'attributeId') {
-             // ReferenceInput usually sends a single ID
-             const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue; // Handle accidental array wrapping
+             const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue; 
              if (idValue !== undefined && idValue !== null) {
                  whereOptions.attributeId = parseInt(idValue); 
              }
         }
-         // --- Generic Handling for other direct columns ---
          else if (this.repo.metadata.hasColumnWithPropertyPath(key)) {
-            // Simple assignment might be okay for other fields, but consider type safety
-            // Example: For string fields, you might want ILike
-            // if (typeof filterValue === 'string') {
-            //   whereOptions[key] = ILike(`%${filterValue}%`); // Import ILike
-            // } else {
+            if (typeof filterValue === 'string') {
+              whereOptions[key] = ILike(`%${filterValue}%`); 
+            } else {
                  whereOptions[key] = filterValue;
-            // }
+            }
         } else {
           console.warn(`findAllSimpleRest (AttributeValue): Ignoring invalid filter field: ${key}`);
         }
@@ -209,19 +197,20 @@ export class AttributeValuesService {
 
     try {
         // Fetch data and total count with relations
-        const [data, total] = await this.repo.findAndCount({ // Changed totalCount to total
+        const [data, total] = await this.repo.findAndCount({ 
           where: whereOptions,
           order: orderOptions,
           take: take,
           skip: skip,
-          relations: ['attribute'], // Include the parent attribute
+          relations: {
+            attribute: true,
+          }
         });
 
         return { data, total }; 
     } catch (error) {
         console.error("Error during AttributeValue findAndCount:", error);
         console.error("Query Parameters Used:", { where: whereOptions, order: orderOptions, take, skip });
-        // Re-throw the error to be handled by NestJS exception filters
         throw error;
     }
   }
@@ -229,7 +218,9 @@ export class AttributeValuesService {
   async findOne(id: number): Promise<AttributeValue> {
     const attributeValue = await this.repo.findOne({ 
       where: { id },
-      relations: ['attribute']
+      relations: {
+        attribute: true, 
+      }
     });
     
     if (!attributeValue) {

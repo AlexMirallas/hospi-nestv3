@@ -3,7 +3,6 @@ import {
   Get, 
   Post, 
   Body, 
-  Patch, 
   Param, 
   Delete, 
   UseGuards, 
@@ -11,6 +10,7 @@ import {
   UsePipes, 
   ValidationPipe,
   Res,
+  Put,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { UsersService } from './users.service';
@@ -42,16 +42,16 @@ export class UsersController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<User[]> {
     try {
-      // Parse the query parameters
+      
       const filter = JSON.parse(filterString);
       const range = JSON.parse(rangeString);
       const sort = JSON.parse(sortString);
 
-      // Extract values
+      
       const [start, end] = range;
       const [sortField, sortOrder] = sort;
 
-      // Call service with extracted parameters
+     
       const { data, totalCount } = await this.usersService.findAllSimpleRest({
         start,
         end,
@@ -60,13 +60,13 @@ export class UsersController {
         filters: filter,
       });
 
-      // Set Content-Range header in the format React Admin expects
+      
       res.header(
         'Content-Range', 
         `users ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
       );
       
-      // Make sure header is exposed via CORS
+     
       res.header('Access-Control-Expose-Headers', 'Content-Range');
 
       return data;
@@ -82,7 +82,7 @@ export class UsersController {
   }
 
 
-  @Patch(':id')
+  @Put(':id')
   @Roles(Role.Admin)
   @UsePipes(new ValidationPipe({ whitelist: true }))
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {

@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards, Put } from '@nestjs/common';
+import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards, Put, Delete } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators'; 
@@ -17,7 +17,7 @@ export class VariantsController {
         private readonly productsService: ProductsService,
     ) {}
 
-    @Post() // Route: POST /products/variants
+    @Post() 
     @UseGuards(JwtAuthGuard, RolesGuard) 
     @Roles(Role.Admin) 
     addVariant(
@@ -62,9 +62,22 @@ export class VariantsController {
     updateVariant(
         @Param('variantId', ParseUUIDPipe) variantId: string, 
         @Body() updateVariantDto: UpdateProductVariantDto,    
-  ) {
+    ): Promise<ProductVariant> {
     console.log('Updating variant with ID:', variantId, 'with data:', updateVariantDto);
     return this.productsService.updateVariant(variantId, updateVariantDto);
-  }
-    // @Delete(':id') removeVariant(...)
+    }
+
+    @Delete(':variantId')
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Roles(Role.Admin)
+    async removeVariant(
+        @Param('variantId', ParseUUIDPipe) variantId: string,
+    ): Promise<void> {
+        const variant = await this.productsService.findVariant(variantId); 
+        if (!variant) {
+            throw new NotFoundException(`Variant with ID ${variantId} not found`);
+        }
+        return this.productsService.removeVariant(variantId);
+    }
+
 }

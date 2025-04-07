@@ -14,7 +14,7 @@ import {
   import { Product } from '../../products/entities/product.entity';
   
   @Entity('categories')
-  @Tree('materialized-path') // Using materialized path for tree structure
+  @Tree('materialized-path')
   export class Category {
     @PrimaryGeneratedColumn()
     id: number;
@@ -25,29 +25,29 @@ import {
   
     @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
     @Index()
-    slug: string; // URL-friendly identifier
+    slug: string; 
   
     @Column({ type: 'text', nullable: true })
     description: string;
   
-    // --- Self-referencing for Hierarchy ---
+   
     @TreeChildren()
     children: Category[];
   
-    @TreeParent({ onDelete: 'SET NULL' }) // Set to null if parent is deleted
+    @TreeParent({ onDelete: 'SET NULL' }) 
     parent: Category | null;
   
     
     @Column({ nullable: true })
     parentId: number | null;
-    // --- End Hierarchy ---
+    
   
   
     // --- Many-to-Many with Product ---
     @ManyToMany(() => Product, (product) => product.categories)
     @JoinTable({
       name: 'product_categories', //  junction table
-      joinColumn: { // Column for the owning side (Category)
+      joinColumn: { 
         name: 'category_id',
         referencedColumnName: 'id',
       },

@@ -14,10 +14,9 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  @HttpCode(HttpStatus.CREATED) // Set appropriate HTTP status code for creation
-  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) // Apply validation
+  @HttpCode(HttpStatus.CREATED) 
+  @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) 
   async signup(@Body() signUpDto: SignUpDto) {
-    // No guard needed, this is a public endpoint
     return this.authService.signup(signUpDto);
   }
 
@@ -42,15 +41,12 @@ export class AuthController {
     return { message: 'Logout successful. Destroy token' };
   }
 
-  // Example protected route to get current user profile
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   getProfile(@Request() req) {
-    // req.user is populated by JwtStrategy.validate
     return req.user;
   }
 
-   // Example admin-only route
    @UseGuards(JwtAuthGuard, RolesGuard)
    @Roles(Role.Admin)
    @Get('admin-check')

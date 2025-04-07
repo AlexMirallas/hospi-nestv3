@@ -11,8 +11,8 @@ export class CreateAttributeValueDto {
     attributeId: number; // Reference to the parent Attribute (e.g., ID for 'Color')
 
     @IsOptional()
-    @IsHexColor() // Built-in validator
-    @Matches(/^#([0-9A-F]{6})$/i, { // More specific regex check including #
+    @IsHexColor() 
+    @Matches(/^#([0-9A-F]{6})$/i, { 
          message: 'hexCode must be a valid hex color code (e.g., #FF0000)',
     })
     @MaxLength(7)

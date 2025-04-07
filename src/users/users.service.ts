@@ -7,15 +7,6 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the path as necessary
 
 
-/*export interface SimpleRestParams {
-  start?: number;
-  end?: number;
-  sort?: string;
-  order?: 'ASC' | 'DESC';
-  filters?: Record<string, any>;
-}
-  */
-
 @Injectable()
 export class UsersService {
   constructor(
@@ -23,7 +14,6 @@ export class UsersService {
     private usersRepository: Repository<User>
   ) {}
 
-  // Near the top of your service class:
 
 
 async findAllSimpleRest(
@@ -31,14 +21,14 @@ async findAllSimpleRest(
 ): Promise<{ data: User[]; totalCount: number }> {
   const { start = 0, end = 9, sort = 'id', order = 'ASC', filters = {} } = params;
 
-  // Calculate pagination
+
   const take = end - start + 1;
   const skip = start;
 
-  // Create query builder
+
   const qb = this.usersRepository.createQueryBuilder('user');
 
-  // Add filters
+ 
   for (const key in filters) {
     if (
       Object.prototype.hasOwnProperty.call(filters, key) && 
@@ -47,41 +37,33 @@ async findAllSimpleRest(
     ) {
       try {
         if (this.usersRepository.metadata.hasColumnWithPropertyPath(key)) {
-          // Get column metadata to check type
+          
           const column = this.usersRepository.metadata.findColumnWithPropertyPath(key);
           
-          // Special case for roles column
           if (key === 'roles') {
-            // If looking for a single role (string value)
             if (typeof filters[key] === 'string') {
-              // Use array contains operator
               qb.andWhere(`user.roles @> ARRAY[:${key}]::users_roles_enum[]`, { 
                 [key]: filters[key] 
               });
             }
-            // If looking for multiple roles (array value)
             else {
               throw new Error('No user roles filter found in the request');
             }
-            continue; // Skip the rest of the loop for this iteration
+            continue; 
           }
           
-          // Handle other array columns
+        
           if (column?.type === 'simple-array' || column?.type === 'array') {
-            // For array columns we need special handling
             if (Array.isArray(filters[key])) {
-              // If value is array, use the @> operator (contains)
               qb.andWhere(`user.${key} @> ARRAY[:...${key}Value]::varchar[]`, { 
                 [`${key}Value`]: filters[key] 
               });
             } else {
-              // For non-array values looking for exact match within array
               qb.andWhere(`user.${key} @> ARRAY[:${key}Value]::varchar[]`, { 
                 [`${key}Value`]: filters[key] 
               });
             }
           } else {
-            // Regular column, use standard equality
             qb.andWhere(`user.${key} = :${key}Value`, { 
               [`${key}Value`]: filters[key] 
             });
@@ -95,17 +77,17 @@ async findAllSimpleRest(
     }
   }
 
-  // Add sorting
+  
   if (this.usersRepository.metadata.hasColumnWithPropertyPath(sort)) {
     qb.orderBy(`user.${sort}`, order as 'ASC' | 'DESC');
   } else {
     qb.orderBy('user.id', 'ASC');
   }
 
-  // Add pagination
+  
   qb.skip(skip).take(take);
 
-  // Execute query
+ 
   const [data, totalCount] = await qb.getManyAndCount();
 
   return { data, totalCount };
@@ -131,7 +113,6 @@ async findAllSimpleRest(
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
     
-    // Update user properties
     Object.assign(user, updateUserDto);
     
     // Save updated user

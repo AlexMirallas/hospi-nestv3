@@ -9,7 +9,7 @@ export class CreateCategoryDto {
   @IsOptional()
   @IsString()
   @MaxLength(255)
-  slug?: string; // Optional: can be auto-generated from name
+  slug?: string; 
 
   @IsOptional()
   @IsString()
@@ -17,6 +17,6 @@ export class CreateCategoryDto {
 
   @IsOptional()
   @IsInt()
-  @Min(1) // Assuming category IDs start from 1
-  parentId?: number | null; // ID of the parent category
+  @Min(1) 
+  parentId?: number | null; 
 }

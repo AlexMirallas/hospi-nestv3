@@ -10,7 +10,8 @@ import {
   UsePipes, 
   ValidationPipe,
   Res,
-  Put 
+  Put,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AttributesService } from './attributes.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
@@ -19,6 +20,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators';
 import { Role } from '../common/enums/role.enum';
+import { SimpleRestContentRangeInterceptor } from '../interceptors/global-interceptors';
 import { AttributeValuesService } from './attributes.service';
 import { CreateAttributeValueDto } from './dto/create-attribute-value.dto';
 import { UpdateAttributeValueDto } from './dto/update-attribute-value.dto';
@@ -30,6 +32,7 @@ import { Response } from 'express';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.Admin)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@UseInterceptors(SimpleRestContentRangeInterceptor) // For transforming responses
 export class AttributesController {
   constructor(private readonly attributesService: AttributesService) {}
 
@@ -63,13 +66,13 @@ export class AttributesController {
         order: sortOrder,
         filters: filter,
       });
-      // Set Content-Range header in the format React Admin expects
+      
       res.header(
         'Content-Range', 
         `attributes ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`
       );
       
-      // Make sure header is exposed via CORS
+      
       res.header('Access-Control-Expose-Headers', 'Content-Range');
 
       return data;
@@ -119,16 +122,13 @@ export class AttributeValuesController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<AttributeValue[]> {
     try {
-      // Parse the query parameters
       const filter = JSON.parse(filterString);
       const range = JSON.parse(rangeString);
       const sort = JSON.parse(sortString);
 
-      // Extract values
       const [start, end] = range;
       const [sortField, sortOrder] = sort;
 
-      // Call service with extracted parameters
       const { data, total } = await this.attributeValuesService.findAllSimpleRest({
         start,
         end,

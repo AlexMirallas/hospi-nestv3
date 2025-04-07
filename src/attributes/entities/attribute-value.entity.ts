@@ -8,21 +8,21 @@ export class AttributeValue {
   id: number;
 
   @Column({ type: 'int', nullable: false })
-  position: number; // Position of the attribute value in the list (e.g., 1 for first, 2 for second, etc.)
+  position: number; 
 
   @Column({ type: 'varchar', length: 100 })
-  value: string; // e.g., 'Red', 'XL'
+  value: string;
 
-  @Column({ type: 'varchar', length: 7, nullable: true }) // e.g., #FF0000
+  @Column({ type: 'varchar', length: 7, nullable: true }) 
   @IsOptional() 
   @IsHexColor() 
   hexCode: string | null;
 
   @ManyToOne(() => Attribute, (attribute) => attribute.values, { nullable: false, onDelete: 'CASCADE' })
-  @JoinColumn({ name: 'attribute_id' }) // Explicitly define foreign key column name
+  @JoinColumn({ name: 'attribute_id' }) 
   attribute: Attribute;
 
-  @Column({ name: 'attribute_id' }) // Store the foreign key ID
+  @Column({ name: 'attribute_id' }) 
   attributeId: number;
 
   @CreateDateColumn()
@@ -32,7 +32,6 @@ export class AttributeValue {
   updatedAt: Date;
 
   isColorAttribute(): boolean {
-    // Ensure attribute is loaded and name exists before checking
     return this.attribute && this.attribute.name?.toLowerCase() === 'couleur';
   }
 }

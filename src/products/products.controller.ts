@@ -12,7 +12,6 @@ import {
   HttpStatus,
   UseInterceptors,
   ClassSerializerInterceptor,
-  NotFoundException,
   BadRequestException,
   ParseUUIDPipe,
   UsePipes,
@@ -26,7 +25,7 @@ import { Roles } from '../common/decorators/roles.decorators';
 import { Role } from '../common/enums/role.enum';
 import { ProductVariant } from './entities/product-variant.entity';
 
-// Import DTOs
+
 import { CreateProductDto } from './dto/create/create-product.dto';
 import { UpdateProductDto } from './dto/update/update-product.dto';
 

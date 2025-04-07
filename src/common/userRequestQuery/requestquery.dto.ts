@@ -20,7 +20,6 @@ export class SimpleRestQueryDto {
   @IsEnum(['ASC', 'DESC'])
   _order?: 'ASC' | 'DESC';
 
-  // These are the fields causing the error - they're sent by React Admin
   @IsOptional()
   filter?: any;
 
@@ -30,6 +29,5 @@ export class SimpleRestQueryDto {
   @IsOptional()
   sort?: any;
 
-  // Allow any other fields to be used as filters
   [key: string]: any;
 }

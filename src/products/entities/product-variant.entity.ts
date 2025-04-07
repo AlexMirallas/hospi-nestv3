@@ -40,7 +40,8 @@ import {
     isActive: boolean;
   
     @OneToMany(() => ProductAttributeValue, attrValue => attrValue.variant, {
-      cascade: true
+      cascade: true,
+      eager: false
     })
     attributeValues: ProductAttributeValue[];
   
