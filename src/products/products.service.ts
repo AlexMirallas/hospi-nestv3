@@ -570,6 +570,10 @@ export class ProductsService {
                      queryBuilder.andWhere('variant.id IN (:...variantIds)', { variantIds: filterValue });
                 }
 
+                else if (key === "stockQuantity") {
+                    queryBuilder.andWhere('variant.stockQuantity < :stockQuantity', { stockQuantity: filterValue });
+                }
+
                 else {
                     console.warn(`VariantsService: Ignoring unknown filter key: ${key}`);
                 }
