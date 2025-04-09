@@ -90,14 +90,20 @@ export class ProductsService {
    */
    async createVariantsForProduct(product: Product, variantDtos: any[]): Promise<void> {
     // Get all referenced attribute values to validate
+
+    const activeAttributes = await this.attributeRepo.find({
+      where: { isActive: true },  
+      relations: { values: true }
+    });
+
     const attributeValueIds = variantDtos.flatMap(
       variant => variant.attributeValues.map(av => av.attributeValueId)
     );
     
-    
+
     const attributeValues = await this.attributeValueBaseRepo.find({
-      where: { id: In(attributeValueIds) },
-      relations: {attribute: true}
+      where: { id: In(activeAttributes) },
+      relations: {attribute: true }
     });
 
     if (attributeValues.length !== new Set(attributeValueIds).size) {
@@ -318,11 +324,8 @@ export class ProductsService {
       console.log('>>> Updated product', product);
 
       await this.productRepo.save(product);
-
-      // Commit transaction
       await queryRunner.commitTransaction();
 
-      // Return updated product with variants
       return this.findOne(id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -395,7 +398,7 @@ export class ProductsService {
    * Helper method to update attribute values for a variant
    */
   private async updateVariantAttributeValues(variant: ProductVariant, attributeValueDtos: any[]): Promise<void> {
-    // Load current attribute values
+    
     const currentAttributeValues = await this.attributeValueRepo.find({
       where: { variant: { id: variant.id } },
       relations: {
@@ -403,7 +406,7 @@ export class ProductsService {
         attribute: true}
     });
     
-    // Get all attribute values referenced
+   
     const attributeValueIds = attributeValueDtos.map(av => av.attributeValueId);
     const attributeValues = await this.attributeValueBaseRepo.find({
       where: { id: In(attributeValueIds) },

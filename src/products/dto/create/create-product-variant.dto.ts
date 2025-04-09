@@ -37,10 +37,10 @@ import {
     @IsArray()
     @ValidateNested({ each: true })
     @Type(() => AttributeValueRefDto)
-    @ArrayNotEmpty()
+    @ArrayNotEmpty( {message: 'At least one attribute value is required.' })
     attributeValues: AttributeValueRefDto[];
 
     @IsNotEmpty()
-    @IsUUID() // Validate that a product ID is provided and is a UUID
+    @IsUUID() 
     productId: string;
   }

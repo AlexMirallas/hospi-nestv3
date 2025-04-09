@@ -16,6 +16,9 @@ export class Attribute {
   @OneToMany(() => AttributeValue, (value) => value.attribute)
   values: AttributeValue[];
 
+  @Column({ type: 'boolean', default: true })
+  isActive: boolean; 
+
   @CreateDateColumn()
   createdAt: Date;
 

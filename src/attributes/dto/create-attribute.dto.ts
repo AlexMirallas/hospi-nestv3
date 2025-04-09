@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 
 export class CreateAttributeDto {
     @IsString()
@@ -9,4 +9,8 @@ export class CreateAttributeDto {
     @IsInt()
     @IsNotEmpty()
     position: number;
+
+    @IsBoolean()
+    @IsNotEmpty()
+    isActive: boolean;
 }

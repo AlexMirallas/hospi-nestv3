@@ -31,7 +31,7 @@ import { UpdateProductDto } from './dto/update/update-product.dto';
 
 
 @Controller('products')
-@UseInterceptors(ClassSerializerInterceptor) // For transforming responses
+@UseInterceptors(ClassSerializerInterceptor) 
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
@@ -56,11 +56,11 @@ export class ProductsController {
       const range = JSON.parse(rangeString);
       const sort = JSON.parse(sortString);
 
-      // Extract values
+      
       const [start, end] = range;
       const [sortField, sortOrder] = sort;
 
-      // Call service
+      
       const { data, total } = await this.productsService.findAllSimpleRest({
         start,
         end,
@@ -69,7 +69,7 @@ export class ProductsController {
         filters: filter
       });
       
-      // Set pagination headers
+     
       res.header(
         'Content-Range', 
         `products ${start}-${Math.min(end, total - 1)}/${total}`
@@ -85,12 +85,11 @@ export class ProductsController {
 
   @Get('variants')
   async findVariantsForProduct(
-    // Use ParseUUIDPipe (or ParseIntPipe) for validation and type safety
     @Param('productId', ParseUUIDPipe) productId: string,
   ): Promise<ProductVariant[]> {
       
       const variants = await this.productsService.findVariantsByProductId(productId);
-      return variants; // Return the array of variants
+      return variants; 
      
   }
 
@@ -121,7 +120,7 @@ export class ProductsController {
     res.status(HttpStatus.NO_CONTENT).send();
   }
 
-  // Variant-specific endpoints
+ 
   @Get('variants/:id')
   async findVariant(@Param('id', ParseUUIDPipe) id: string) {
     return this.productsService.findVariant(id);
