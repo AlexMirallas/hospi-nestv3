@@ -1,9 +1,9 @@
-import { IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsNumber } from 'class-validator';
 
 export class AttributeValueRefDto {
   @IsNotEmpty()
-  attributeId: number;
+  attributeId: number; 
 
   @IsNotEmpty()
-  attributeValueId: number;
+  attributeValueId: number; 
 }

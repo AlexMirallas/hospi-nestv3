@@ -18,7 +18,7 @@ export class Product {
   description: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0.00 })
-  basePrice: number; // Price of the 'base' product before variant adjustments
+  basePrice: number; 
 
   @Column({ type: 'boolean', default: true })
   isActive: boolean;

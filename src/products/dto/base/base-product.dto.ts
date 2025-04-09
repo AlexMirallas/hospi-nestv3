@@ -5,7 +5,6 @@ import {
     IsBoolean, 
     IsArray,
     IsUUID,
-    IsNotEmpty,
     MaxLength,
     Min
   } from 'class-validator';

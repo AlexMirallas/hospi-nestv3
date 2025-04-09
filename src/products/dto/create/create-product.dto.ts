@@ -25,7 +25,7 @@ export class CreateProductDto {
     @IsBoolean()
     isActive?: boolean = true;
 
-    //handle category IDs
+
     @IsOptional()
     @IsArray()
     categoryIds?: string[];
