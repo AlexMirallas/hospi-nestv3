@@ -542,7 +542,7 @@ export class ProductsService {
     const take = end - start + 1;
     const skip = start;
 
-    // Start QueryBuilder for ProductVariant
+   
     const queryBuilder = this.variantRepo.createQueryBuilder('variant')
         .leftJoinAndSelect('variant.product', 'product') 
         .leftJoinAndSelect('variant.attributeValues', 'pav')
@@ -573,7 +573,9 @@ export class ProductsService {
                 else if (key === "stockQuantity") {
                     queryBuilder.andWhere('variant.stockQuantity < :stockQuantity', { stockQuantity: filterValue });
                 }
-
+                else if (key === "name") {
+                    queryBuilder.andWhere('product.name ILIKE :name', { name: `%${filterValue}%` });
+                }
                 else {
                     console.warn(`VariantsService: Ignoring unknown filter key: ${key}`);
                 }
