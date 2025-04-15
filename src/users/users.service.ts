@@ -1,17 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository,FindOptionsWhere, FindOptionsOrder, MoreThanOrEqual, LessThanOrEqual, Like } from 'typeorm';
 import { User } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Adjust the path as necessary
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
+import { UserRepository } from './repositories/user.repository';
 
 
 @Injectable()
 export class UsersService {
   constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>
+    private usersRepository: UserRepository,
   ) {}
 
 
@@ -101,9 +99,21 @@ async findAllSimpleRest(
     return user;
   }
 
-  async findOneByEmail(email: string): Promise<User | null> {
-    return this.usersRepository.findOne({ where: { email } });
+  /**
+   * @param email 
+   * @param unscoped 
+   */
+  async findOneByEmail(email: string, unscoped: boolean = false): Promise<User | null> {
+    if (unscoped) {
+      console.log('Unscoped user search:', email);
+      return this.usersRepository.findOneByEmailUnscoped(email);
+    } else {
+      console.log('Scoped user search:', email);
+      return this.usersRepository.findOneBy({ email });
+    }
   }
+
+  
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const user = this.usersRepository.create(createUserDto);

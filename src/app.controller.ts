@@ -14,10 +14,11 @@ export class AppController {
     return this.appService.getHello();
   }
 
+
+  // Check database connection
   @Get('health')
   async checkHealth() {
     try {
-      // Check database connection
       const isConnected = this.dataSource.isInitialized;
       
       return {

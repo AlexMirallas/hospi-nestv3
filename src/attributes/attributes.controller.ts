@@ -30,7 +30,7 @@ import { Response } from 'express';
 
 @Controller('attributes')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.Admin)
+@Roles(Role.Admin,Role.SuperAdmin)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 @UseInterceptors(SimpleRestContentRangeInterceptor) // For transforming responses
 export class AttributesController {
@@ -103,7 +103,7 @@ export class AttributesController {
 
 @Controller('attribute-values')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.Admin)
+@Roles(Role.Admin,Role.SuperAdmin)
 @UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class AttributeValuesController {
   constructor(private readonly attributeValuesService: AttributeValuesService) {}

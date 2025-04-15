@@ -1,4 +1,3 @@
-// src/users/entities/user.entity.ts
 import {
     Entity,
     PrimaryGeneratedColumn,
@@ -8,10 +7,13 @@ import {
     BeforeInsert,
     BeforeUpdate,
     Index,
+    ManyToMany,
+    JoinColumn,
   } from 'typeorm';
   import { Role } from '../../common/enums/role.enum';
   import * as bcrypt from 'bcrypt';
-  import { Exclude } from 'class-transformer'; // Important for hiding password
+  import { Exclude } from 'class-transformer'; 
+import { Client } from 'src/clients/entities/client.entity';
   
   @Entity('users')
   export class User {
@@ -38,11 +40,18 @@ import {
     @Column({
       type: 'enum',
       enum: Role,
-      array: true, // Store roles as an array
-      default: [Role.Admin],
+      array: true, 
+      default: [Role.SuperAdmin],
     })
     roles: Role[];
-  
+    
+    @Column({name: 'client_id', type: 'uuid', nullable: true})
+    clientId: string;
+    
+    @ManyToMany(()=> Client, client => client.users)
+    @JoinColumn({ name: 'client_id' })
+    client: Client;
+
     @CreateDateColumn()
     createdAt: Date;
   

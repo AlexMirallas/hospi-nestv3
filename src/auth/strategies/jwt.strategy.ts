@@ -5,12 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { UsersService } from '../../users/users.service';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { User } from '../../users/entities/user.entity';
+import { ClsService } from 'nestjs-cls';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(
     private configService: ConfigService,
     private usersService: UsersService,
+    private readonly cls: ClsService, 
   ) {
     const jwtSecret = configService.get<string>('JWT_SECRET');
     if (!jwtSecret) {
@@ -25,10 +27,24 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload): Promise<Omit<User, 'password'>> {
+    if (!payload.clientId || !payload.roles) {
+      console.error('JWT Payload missing clientId or roles:', payload);
+      throw new UnauthorizedException('Invalid token payload.');
+    }
+
+    this.cls.set('clientId', payload.clientId);
+    this.cls.set('userRoles', payload.roles); 
+
     const user = await this.usersService.findOne(payload.sub); 
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+
+    if (user.clientId !== payload.clientId) {
+      console.warn(`Token clientId (${payload.clientId}) does not match user's clientId (${user.clientId}) for user ${user.id}`);
+      throw new UnauthorizedException('Client mismatch.');
+  }
+
     Object.defineProperty(user, 'password', { 
       enumerable: false,
       configurable: true,

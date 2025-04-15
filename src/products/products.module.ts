@@ -9,15 +9,20 @@ import { ProductAttributeValue } from './entities/product-attribute-value.entity
 import { AttributesModule } from '../attributes/attributes.module';
 import { VariantsController } from './product-variants.controller';
 import { SimpleRestContentRangeInterceptor } from 'src/interceptors/global-interceptors';
+import { ProductRepository } from './repositories/product.repository';
+import { ProductVariantRepository } from './repositories/product-variant.repository';
+import { AttributeRepository } from 'src/attributes/repositories/attribute.repository';
+import { AttributeValueRepository } from 'src/attributes/repositories/attribute-value.repository';
+import { CategoryRepository } from 'src/categories/repositories/category.repository';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Product, ProductVariant, ProductAttributeValue]),
+    TypeOrmModule.forFeature([ProductAttributeValue]),
     AttributesModule, 
     CategoriesModule,
   ],
   controllers: [ProductsController,VariantsController],
-  providers: [ProductsService,SimpleRestContentRangeInterceptor],
-  exports: [ProductsService],
+  providers: [ProductsService,SimpleRestContentRangeInterceptor,ProductRepository,ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository],
+  exports: [ProductsService, ProductRepository, ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository], 
 })
 export class ProductsModule {}

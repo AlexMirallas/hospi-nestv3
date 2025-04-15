@@ -12,23 +12,23 @@ import { AttributeValue } from '../attributes/entities/attribute-value.entity';
 import { Attribute } from '../attributes/entities/attribute.entity';
 import { CreateProductVariantDto } from './dto/create/create-product-variant.dto';
 import { UpdateProductVariantDto } from './dto/update/update-product-variant.dto';
+import { ProductRepository } from './repositories/product.repository';
+import { ProductVariantRepository } from './repositories/product-variant.repository';
+import { AttributeValueRepository } from '../attributes/repositories/attribute-value.repository';
+import { AttributeRepository } from '../attributes/repositories/attribute.repository';
+import { CategoryRepository } from '../categories/repositories/category.repository';
 
 
 @Injectable()
 export class ProductsService {
   constructor(
-    @InjectRepository(Product)
-    private productRepo: Repository<Product>,
-    @InjectRepository(ProductVariant)
-    private variantRepo: Repository<ProductVariant>,
+    private productRepo: ProductRepository,
+    private variantRepo: ProductVariantRepository,
     @InjectRepository(ProductAttributeValue)
     private attributeValueRepo: Repository<ProductAttributeValue>,
-    @InjectRepository(AttributeValue)
-    private attributeValueBaseRepo: Repository<AttributeValue>,
-    @InjectRepository(Attribute)
-    private attributeRepo: Repository<Attribute>,
-    @InjectRepository(Category)
-    private categoryRepository: Repository<Category>,
+    private attributeValueBaseRepo: AttributeValueRepository,
+    private attributeRepo: AttributeRepository,
+    private categoryRepository:  CategoryRepository,
     private dataSource: DataSource
   ) {}
 

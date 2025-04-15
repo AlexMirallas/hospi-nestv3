@@ -28,16 +28,20 @@ import { ProductVariant } from './entities/product-variant.entity';
 
 import { CreateProductDto } from './dto/create/create-product.dto';
 import { UpdateProductDto } from './dto/update/update-product.dto';
+import { use } from 'passport';
+import { AuthGuard } from '@nestjs/passport';
 
 
 @Controller('products')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.Admin, Role.SuperAdmin)
 @UseInterceptors(ClassSerializerInterceptor) 
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.SuperAdmin)
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async create(@Body() createProductDto: CreateProductDto) {
     return this.productsService.create(createProductDto);

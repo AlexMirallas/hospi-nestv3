@@ -9,7 +9,7 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   @MinLength(6, { message: 'Password must be at least 6 characters long' })
-  password: string; // Will be hashed by the entity's BeforeInsert hook
+  password: string; 
 
   @IsString()
   @IsNotEmpty()
@@ -27,4 +27,7 @@ export class CreateUserDto {
   @IsArray()
   @IsEnum(Role, { each: true })
   roles?: Role[] = [Role.User]; // Default role
+
+  @IsOptional()
+  clientId?: string; 
 }

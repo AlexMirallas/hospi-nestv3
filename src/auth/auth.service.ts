@@ -6,17 +6,21 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { User } from '../users/entities/user.entity';
 import { SignUpDto } from './dto/signup.dto';
 import { CreateUserDto } from '../users/dto/create-user.dto';
-import { Role } from '../common/enums/role.enum'; 
+import { Role } from '../common/enums/role.enum';
+import { ConfigService } from '@nestjs/config';
+import { ClientsService } from 'src/clients/clients.service'; 
 
 @Injectable()
 export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private configService: ConfigService,
+    private clientsService: ClientsService,
   ) {}
 
   async validateUser(email: string, pass: string): Promise<Omit<User, 'password' | 'validatePassword' | 'hashPassword' > | null> {
-    const user = await this.usersService.findOneByEmail(email);
+    const user = await this.usersService.findOneByEmail(email, true);
     if (user && await user.validatePassword(pass)) {
       const { password, ...result } = user;  //Not returning password, dont get confused, hala madrid
       return result;
@@ -34,6 +38,7 @@ export class AuthService {
       email: user.email,
       sub: user.id,
       roles: user.roles,
+      clientId: user.clientId,
      };
 
     return {
@@ -42,16 +47,23 @@ export class AuthService {
   }
    
    async signup(signUpDto: SignUpDto): Promise<{ accessToken: string, user: Omit<User, 'password' | 'validatePassword' | 'hashPassword'> }> {
-    const existingUser = await this.usersService.findOneByEmail(signUpDto.email);
+    const existingUser = await this.usersService.findOneByEmail(signUpDto.email,true);
     if (existingUser) {
       throw new ConflictException('Email address is already registered.');
     }
 
+    const defaultClientId = this.configService.get<string>('DEFAULT_CLIENT_ID');
+    if (!defaultClientId) {
+        throw new InternalServerErrorException('Default Client ID not configured for signup.');
+    }
     
     const createUserDto: CreateUserDto = {
         ...signUpDto,
-        roles: [Role.Admin], // to change in the future when having a proper method to assign roles
-    };
+        roles: [Role.SuperAdmin], // to change in the future when having a proper method to assign roles
+        clientId: defaultClientId,
+      };
+
+    
 
     let newUser: User;
     try { 
@@ -68,6 +80,7 @@ export class AuthService {
       email: newUser.email,
       sub: newUser.id,
       roles: newUser.roles,
+      clientId: newUser.clientId,
     };
     const accessToken = this.jwtService.sign(payload);
 

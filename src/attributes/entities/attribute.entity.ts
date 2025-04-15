@@ -1,5 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index, CreateDateColumn,JoinColumn, UpdateDateColumn, ManyToMany } from 'typeorm';
 import { AttributeValue } from '../entities/attribute-value.entity';
+import { Client } from 'src/clients/entities/client.entity';
 0
 @Entity('attributes')
 export class Attribute {
@@ -17,7 +18,14 @@ export class Attribute {
   values: AttributeValue[];
 
   @Column({ type: 'boolean', default: true })
-  isActive: boolean; 
+  isActive: boolean;
+
+  @Column({ name: 'client_id', type: 'uuid', nullable: true })
+  clientId: string;
+  
+  @ManyToMany(()=> Client, client => client.products)
+  @JoinColumn({ name: 'client_id' })
+  client: Client;
 
   @CreateDateColumn()
   createdAt: Date;

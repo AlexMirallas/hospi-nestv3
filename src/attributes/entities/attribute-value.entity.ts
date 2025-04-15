@@ -1,6 +1,7 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn, JoinColumn,OneToMany, } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn,ManyToMany, UpdateDateColumn, JoinColumn,OneToMany, } from 'typeorm';
 import { Attribute } from './attribute.entity';
 import { IsHexColor, IsOptional } from 'class-validator';
+import { Client } from 'src/clients/entities/client.entity';
 
 @Entity('attribute_values')
 export class AttributeValue {
@@ -24,6 +25,13 @@ export class AttributeValue {
 
   @Column({ name: 'attribute_id' }) 
   attributeId: number;
+
+  @Column({ name: 'client_id', type: 'uuid', nullable: true })
+  clientId: string;
+  
+  @ManyToMany(()=> Client, client => client.products)
+  @JoinColumn({ name: 'client_id' })
+  client: Client;
 
   @CreateDateColumn()
   createdAt: Date;

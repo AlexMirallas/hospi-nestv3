@@ -196,7 +196,6 @@ export class AttributeValuesService {
     }
 
     try {
-        // Fetch data and total count with relations
         const [data, total] = await this.repo.findAndCount({ 
           where: whereOptions,
           order: orderOptions,

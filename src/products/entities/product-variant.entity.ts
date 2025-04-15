@@ -3,7 +3,8 @@ import {
     PrimaryGeneratedColumn, 
     Column, 
     ManyToOne, 
-    OneToMany, 
+    OneToMany,
+    ManyToMany, 
     CreateDateColumn, 
     UpdateDateColumn,
     JoinColumn,
@@ -12,6 +13,8 @@ import {
   } from 'typeorm';
   import { Product } from './product.entity';
   import { ProductAttributeValue } from './product-attribute-value.entity';
+  import { Client } from 'src/clients/entities/client.entity';
+
   
   @Entity('product_variants')
   @Unique(['product', 'sku']) // Ensure SKU is unique within a product
@@ -44,6 +47,13 @@ import {
       onDelete: 'CASCADE'
     })
     attributeValues: ProductAttributeValue[];
+
+    @Column({ name: 'client_id', type: 'uuid', nullable: true })
+      clientId: string;
+    
+    @ManyToMany(()=> Client, client => client.products)
+    @JoinColumn({ name: 'client_id' })
+    client: Client;
   
     @CreateDateColumn()
     createdAt: Date;

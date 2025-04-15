@@ -12,6 +12,9 @@ import { Role } from 'src/common/enums/role.enum';
 import { ParseSimpleRestParamsPipe } from 'src/common/pipes/parse-simple-rest.pipe';
 
 @Controller('variants')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.Admin, Role.SuperAdmin)
+@UseInterceptors(SimpleRestContentRangeInterceptor)
 export class VariantsController {
     constructor(
         private readonly productsService: ProductsService,
@@ -27,7 +30,6 @@ export class VariantsController {
     }
 
     
-    // GET /variants - Find variants, filterable by productId 
     @Get()
     @UseInterceptors(SimpleRestContentRangeInterceptor)
     async findAllVariants(

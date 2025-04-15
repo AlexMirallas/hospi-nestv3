@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, MaxLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, MaxLength, IsUUID } from 'class-validator';
 
 
 
@@ -30,5 +30,8 @@ export class SignUpDto {
   @MaxLength(20)
   phone?: string;
 
+  @IsOptional()
+  @IsUUID('4', { message: 'Client ID must be a valid UUID.' })
+  cientId?: string;
   // NOTE: Roles are NOT included here. They are assigned default 'User' role by the service.
 }

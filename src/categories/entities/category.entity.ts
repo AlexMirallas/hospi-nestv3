@@ -10,8 +10,10 @@ import {
     ManyToMany,
     JoinTable,
     Index,
+    JoinColumn,
   } from 'typeorm';
   import { Product } from '../../products/entities/product.entity';
+  import { Client } from 'src/clients/entities/client.entity';
   
   @Entity('categories')
   @Tree('materialized-path')
@@ -41,23 +43,26 @@ import {
     @Column({ nullable: true })
     parentId: number | null;
     
-  
-  
-    // --- Many-to-Many with Product ---
     @ManyToMany(() => Product, (product) => product.categories)
     @JoinTable({
-      name: 'product_categories', //  junction table
+      name: 'product_categories',
       joinColumn: { 
         name: 'category_id',
         referencedColumnName: 'id',
       },
-      inverseJoinColumn: { // Column for the other side (Product)
+      inverseJoinColumn: { 
         name: 'product_id',
         referencedColumnName: 'id',
       },
     })
     products: Product[]; 
-  
+    
+    @Column({ name: 'client_id', type: 'uuid', nullable: true })
+    clientId: string;
+    
+    @ManyToMany(()=> Client, client => client.products)
+    @JoinColumn({ name: 'client_id' })
+    client: Client;
   
     @CreateDateColumn()
     createdAt: Date;
@@ -65,5 +70,4 @@ import {
     @UpdateDateColumn()
     updatedAt: Date;
   
-    // TODO: Add @BeforeInsert / @BeforeUpdate hook to generate slug from name if needed
   }

@@ -31,7 +31,7 @@ export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
 
   @Post()
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.SuperAdmin)
   create(@Body() createCategoryDto: CreateCategoryDto) {
     return this.categoriesService.create(createCategoryDto);
   }
@@ -89,19 +89,20 @@ export class CategoriesController {
   }
 
   @Put(':id')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin,Role.SuperAdmin)
   update(@Param('id') id: string, @Body() updateCategoryDto: UpdateCategoryDto) {
     return this.categoriesService.update(+id, updateCategoryDto);
   }
 
   @Delete(':id')
-  @Roles(Role.Admin)
+  @Roles(Role.Admin,Role.SuperAdmin)
   remove(@Param('id') id: string) {
     return this.categoriesService.remove(+id);
   }
 
-  @Get('stats') // Using a distinct path for clarity
-  @UsePipes(ParseSimpleRestParamsPipe) // Use the pipe to parse query params
+  @Get('stats')
+  @Roles(Role.Admin,Role.SuperAdmin) 
+  @UsePipes(ParseSimpleRestParamsPipe) 
   findWithCount(@Query() params: SimpleRestParams) {
     return this.categoriesService.findWithProductCount(params);
   }
