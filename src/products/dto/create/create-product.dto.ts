@@ -30,13 +30,6 @@ export class CreateProductDto {
     @IsArray()
     categoryIds?: string[];
 
-    // Handle nested attribute combinations
-    /*@IsOptional()
-    @IsArray()
-    @ValidateNested({ each: true })
-    @Type(() => ProductAttributeDto)
-    attributeCombinations?: ProductAttributeDto[];
-    */
 
     @IsArray()
     @ValidateNested({ each: true })
@@ -44,4 +37,7 @@ export class CreateProductDto {
     @IsOptional()
     variants?: CreateProductVariantDto[];
 
+    @IsNotEmpty()
+    @IsUUID()
+    clientId: string; 
 }

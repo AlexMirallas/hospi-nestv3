@@ -15,7 +15,7 @@ export class Client {
   @Column({ type: 'varchar', length: 255, unique: true })
   name: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, unique: true }) // e.g., for subdomain routing
+  @Column({ type: 'varchar', length: 255, nullable: true, unique: true }) 
   subdomain: string;
 
   @Column({ type: 'enum', default: Status.Active ,enum: Status })

@@ -28,8 +28,7 @@ import { ProductVariant } from './entities/product-variant.entity';
 
 import { CreateProductDto } from './dto/create/create-product.dto';
 import { UpdateProductDto } from './dto/update/update-product.dto';
-import { use } from 'passport';
-import { AuthGuard } from '@nestjs/passport';
+
 
 
 @Controller('products')

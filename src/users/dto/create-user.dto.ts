@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsEnum, IsArray, IsUUID } from 'class-validator';
 import { Role } from '../../common/enums/role.enum';
 
 export class CreateUserDto {
@@ -28,6 +28,7 @@ export class CreateUserDto {
   @IsEnum(Role, { each: true })
   roles?: Role[] = [Role.User]; // Default role
 
-  @IsOptional()
+  @IsNotEmpty()
+  @IsUUID()
   clientId?: string; 
 }

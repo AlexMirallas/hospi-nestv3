@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException,InternalServerErrorException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException,ConflictException } from '@nestjs/common';
 import { InjectRepository, } from '@nestjs/typeorm';
 import { Repository, In, DataSource } from 'typeorm';
 import { Product } from './entities/product.entity';
@@ -17,6 +17,8 @@ import { ProductVariantRepository } from './repositories/product-variant.reposit
 import { AttributeValueRepository } from '../attributes/repositories/attribute-value.repository';
 import { AttributeRepository } from '../attributes/repositories/attribute.repository';
 import { CategoryRepository } from '../categories/repositories/category.repository';
+import { ClsService } from 'nestjs-cls';
+import { Role } from '../common/enums/role.enum';
 
 
 @Injectable()
@@ -29,7 +31,8 @@ export class ProductsService {
     private attributeValueBaseRepo: AttributeValueRepository,
     private attributeRepo: AttributeRepository,
     private categoryRepository:  CategoryRepository,
-    private dataSource: DataSource
+    private dataSource: DataSource,
+    private readonly cls: ClsService,
   ) {}
 
   /**
@@ -37,9 +40,30 @@ export class ProductsService {
    */
   async create(createProductDto: CreateProductDto): Promise<Product> {
     
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+
+    if (!currentUserRoles || !currentUserClientId) {
+        throw new InternalServerErrorException('User context not found.');
+    }
+
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+    let finalClientId = createProductDto.clientId;
+
+    if (isSuperAdmin) {
+      console.log(`SuperAdmin creating product for client ${finalClientId}`);
+  } else if (currentUserRoles.includes(Role.Admin)) {
+      finalClientId = currentUserClientId;
+      console.log(`Admin creating product. Overriding clientId to Admin's client: ${finalClientId}`);
+  } else {
+      throw new ForbiddenException('You do not have permission to create products.');
+  }
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
+    console.log('>>> Received createProductDto:', createProductDto);
 
     try {
       const product = this.productRepo.create({
@@ -47,7 +71,8 @@ export class ProductsService {
         name: createProductDto.name,
         description: createProductDto.description,
         basePrice: createProductDto.basePrice,
-        isActive: createProductDto.isActive ?? true
+        isActive: createProductDto.isActive ?? true,
+        clientId: createProductDto.clientId,
       });
 
       if (createProductDto.categoryIds && createProductDto.categoryIds.length > 0) {
@@ -62,25 +87,19 @@ export class ProductsService {
         product.categories = categories;
       }
 
-      // 3. Save the base product 
       await this.productRepo.save(product);
 
-      // 4. Create variants if provided
       if (createProductDto.variants && createProductDto.variants.length > 0) {
         await this.createVariantsForProduct(product, createProductDto.variants);
       }
 
-      // Commit transaction
       await queryRunner.commitTransaction();
 
-      // Return the product with variants
       return this.findOne(product.id);
     } catch (error) {
-      // Rollback transaction on error
-      await queryRunner.rollbackTransaction();
-      throw error;
+        await queryRunner.rollbackTransaction();
+        throw error;
     } finally {
-      // Release query runner
       await queryRunner.release();
     }
   }
@@ -89,7 +108,6 @@ export class ProductsService {
    * Helper method to create variants for a product
    */
    async createVariantsForProduct(product: Product, variantDtos: any[]): Promise<void> {
-    // Get all referenced attribute values to validate
 
     const activeAttributes = await this.attributeRepo.find({
       where: { isActive: true },  
@@ -602,6 +620,14 @@ export class ProductsService {
 
 
   async addVariantToProduct(createVariantDto: CreateProductVariantDto): Promise<ProductVariant> {
+
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -612,6 +638,16 @@ export class ProductsService {
       });
       if (!product) {
         throw new NotFoundException(`Product with ID ${createVariantDto.productId} not found.`);
+      }
+
+      const finalClientId = product.clientId;
+      if(!isSuperAdmin) {
+        if(product.clientId !== currentUserClientId) {
+          throw new ForbiddenException('You do not have permission to add variants to this product.');
+        }
+        console.log(`Admin creating variant for product with clientId ${finalClientId}`);
+      } else {
+        console.log(`SuperAdmin creating variant for product with clientId ${finalClientId}`);
       }
 
       const attributeValueIds = createVariantDto.attributeValues.map(av => av.attributeValueId);
@@ -639,9 +675,9 @@ export class ProductsService {
         priceAdjustment: createVariantDto.priceAdjustment ?? 0,
         stockQuantity: createVariantDto.stockQuantity ?? 0,
         isActive: createVariantDto.isActive ?? true,
-        product: product, 
+        product: { id: product.id },
+        clientId: finalClientId,
       });
-
 
       await queryRunner.manager.save(ProductVariant, newVariant);
 
@@ -650,7 +686,8 @@ export class ProductsService {
           return queryRunner.manager.create(ProductAttributeValue, {
               variant: newVariant, 
               attributeValue: attrValue, 
-              attribute: attrValue.attribute, 
+              attribute: attrValue.attribute,
+              clientId: finalClientId, 
           });
       });
 
@@ -669,13 +706,20 @@ export class ProductsService {
         }
       });
       if(!createdVariant) {
-        throw new Error('Failed to retrieve created variant after transaction.');
+        throw new InternalServerErrorException('Failed to retrieve created variant after transaction.');
       }
       return createdVariant;
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw error;
+      console.error("Error adding variant to product:", error);
+       if (error instanceof BadRequestException || error instanceof ForbiddenException || error instanceof NotFoundException) {
+           throw error;
+       }
+       if (error.code === '23505') {
+           throw new ConflictException(`Variant creation failed: ${error.detail || 'Duplicate value detected.'}`);
+       }
+      throw new InternalServerErrorException(`Failed to add variant: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -717,6 +761,7 @@ export class ProductsService {
       if (updateDto.priceAdjustment !== undefined) variant.priceAdjustment = updateDto.priceAdjustment;
       if (updateDto.stockQuantity !== undefined) variant.stockQuantity = updateDto.stockQuantity;
       if (updateDto.isActive !== undefined) variant.isActive = updateDto.isActive;
+      
 
       // Save the basic variant fields first
       await queryRunner.manager.save(ProductVariant, variant);

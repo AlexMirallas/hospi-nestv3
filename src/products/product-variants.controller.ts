@@ -22,7 +22,7 @@ export class VariantsController {
 
     @Post() 
     @UseGuards(JwtAuthGuard, RolesGuard) 
-    @Roles(Role.Admin) 
+    @Roles(Role.Admin, Role.SuperAdmin) 
     addVariant(
       @Body() createVariantDto: CreateProductVariantDto, 
     ): Promise<ProductVariant> {
@@ -44,7 +44,7 @@ export class VariantsController {
     // GET /variants/:id - Find a single variant by its own ID 
     @Get(':id')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(Role.Admin)
+    @Roles(Role.Admin, Role.SuperAdmin)
     async findOneVariant(
         @Param('id', ParseUUIDPipe) id: string 
     ): Promise<ProductVariant> {
@@ -82,7 +82,7 @@ export class VariantsController {
 
     @Delete(':variantId')
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(Role.Admin)
+    @Roles(Role.Admin, Role.SuperAdmin)
     async removeVariant(
         @Param('variantId', ParseUUIDPipe) variantId: string,
     ): Promise<void> {

@@ -1,4 +1,4 @@
-import { IsOptional, IsString, IsNotEmpty, IsNumber, IsBoolean, IsArray, IsInt } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty, IsNumber, IsBoolean, IsArray, IsInt, IsUUID } from 'class-validator';
     
 
 export class UpdateProductDto {
@@ -27,5 +27,9 @@ export class UpdateProductDto {
     @IsOptional()
     @IsArray()
     @IsInt({ each: true }) 
-    categoryIds?: number[]; 
+    categoryIds?: number[];
+    
+    @IsNotEmpty()
+    @IsUUID()
+    clientId: string;
 }
