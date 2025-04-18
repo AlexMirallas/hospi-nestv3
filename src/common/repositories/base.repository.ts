@@ -1,11 +1,12 @@
 import { Repository, SelectQueryBuilder, FindOneOptions, FindManyOptions, ObjectLiteral, FindOptionsWhere } from 'typeorm';
 import { ClsService } from 'nestjs-cls';
-import { Role } from '../enums/role.enum'; // Adjust path as needed
+import { Role } from '../enums/role.enum'; 
 
 export interface ITenantSpecificEntity {
   clientId: string;
   [key: string]: any; 
 }
+
 
 export abstract class BaseRepository<T extends ITenantSpecificEntity> extends Repository<T> {
   

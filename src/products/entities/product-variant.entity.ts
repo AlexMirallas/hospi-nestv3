@@ -49,9 +49,9 @@ import {
     attributeValues: ProductAttributeValue[];
 
     @Column({ name: 'client_id', type: 'uuid', nullable: true })
-      clientId: string;
+    clientId: string;
     
-    @ManyToMany(()=> Client, client => client.products)
+    @ManyToOne(()=> Client, client => client.productVariants)
     @JoinColumn({ name: 'client_id' })
     client: Client;
   

@@ -7,7 +7,7 @@ import {
     BeforeInsert,
     BeforeUpdate,
     Index,
-    ManyToMany,
+    ManyToOne,
     JoinColumn,
   } from 'typeorm';
   import { Role } from '../../common/enums/role.enum';
@@ -48,7 +48,7 @@ import { Client } from 'src/clients/entities/client.entity';
     @Column({name: 'client_id', type: 'uuid', nullable: true})
     clientId: string;
     
-    @ManyToMany(()=> Client, client => client.users)
+    @ManyToOne(()=> Client, client => client.users)
     @JoinColumn({ name: 'client_id' })
     client: Client;
 

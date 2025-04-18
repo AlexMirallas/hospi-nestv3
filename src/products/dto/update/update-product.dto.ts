@@ -29,7 +29,4 @@ export class UpdateProductDto {
     @IsInt({ each: true }) 
     categoryIds?: number[];
     
-    @IsNotEmpty()
-    @IsUUID()
-    clientId: string;
 }

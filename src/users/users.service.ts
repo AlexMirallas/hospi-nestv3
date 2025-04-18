@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, NotFoundException,ConflictException, ForbiddenException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { User } from './entities/user.entity';
 import { Role } from '../common/enums/role.enum';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
 import { UserRepository } from './repositories/user.repository';
 import { ClsService } from 'nestjs-cls';
+import { Roles } from 'src/common/decorators/roles.decorators';
 
 
 @Injectable()
@@ -119,97 +120,159 @@ async findAllSimpleRest(
   
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    // Get current user's context from CLS
     const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
     const currentUserClientId = this.cls.get('clientId') as string | undefined;
 
     if (!currentUserRoles || !currentUserClientId) {
-        // This shouldn't happen if AuthGuard is working, but good to check
         throw new InternalServerErrorException('User context not found.');
     }
 
     const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
-    let finalClientId = createUserDto.clientId; // Start with DTO value
-    let finalRoles = createUserDto.roles ?? [Role.User]; // Default to User if not provided
+    let finalClientId = createUserDto.clientId; 
+    let finalRoles = createUserDto.roles ?? [Role.User]; 
     if (isSuperAdmin) {
-        // SuperAdmin MUST provide a valid clientId (already validated by DTO's @IsNotEmpty)
-        // SuperAdmin can assign any role provided in the DTO.
-        // We already assigned finalClientId and finalRoles from DTO.
         if (!finalRoles || finalRoles.length === 0) {
-             // Ensure roles array is not empty if provided
              finalRoles = [Role.User];
         }
-        console.log(`SuperAdmin creating user for client ${finalClientId} with roles ${finalRoles.join(', ')}`);
-
     } else if (currentUserRoles.includes(Role.Admin)) {
-        // Admin creating user:
-        console.log(`Admin from client ${currentUserClientId} attempting to create user.`);
-
-        // 1. Force clientId to the Admin's own client
         finalClientId = currentUserClientId;
-        console.log(`Overriding clientId to Admin's client: ${finalClientId}`);
-
-        // 2. Prevent Admin from assigning SuperAdmin role
         if (finalRoles.includes(Role.SuperAdmin)) {
-            console.warn(`Admin ${currentUserClientId} attempted to create SuperAdmin.`);
             throw new ForbiddenException('Admins cannot create SuperAdmin users.');
         }
-         // Ensure roles array is not empty if provided
          if (!finalRoles || finalRoles.length === 0) {
             finalRoles = [Role.User];
        }
-        console.log(`Admin creating user for their client ${finalClientId} with roles ${finalRoles.join(', ')}`);
-
     } else {
-        // Should be blocked by RolesGuard, but as a safeguard:
         throw new ForbiddenException('You do not have permission to create users.');
     }
 
-    // Prepare the final payload
     const userPayload: Partial<User> = {
-        ...createUserDto, // Spread the original DTO (includes email, password, names, etc.)
-        clientId: finalClientId, // Use the determined clientId
-        roles: finalRoles, // Use the determined/validated roles
+        ...createUserDto, 
+        clientId: finalClientId, 
+        roles: finalRoles, 
     };
-
-    // Check for existing email (unscoped) before creating
  
- if (!userPayload.email) {
-    throw new InternalServerErrorException('Email is required to create a user.');
- }
- const existingUser = await this.findOneByEmail(userPayload.email, true);
+    if (!userPayload.email) {
+        throw new InternalServerErrorException('Email is required to create a user.');
+    }
+    const existingUser = await this.findOneByEmail(userPayload.email, true);
     if (existingUser) {
         throw new ConflictException('Email address is already registered.');
     }
 
-
     try {
-        // Create and save the user using the repository
-        // The TenantSubscriber will NOT run here because we are explicitly setting clientId
         const user = this.usersRepository.create(userPayload);
         return await this.usersRepository.save(user);
     } catch (error) {
-         // Handle potential database errors (like unique constraints if email check somehow failed)
-         if (error.code === '23505') { // Postgres unique violation
+         if (error.code === '23505') {
             throw new ConflictException('Email address might already be registered.');
         }
-        console.error("Error creating user:", error);
         throw new InternalServerErrorException('Failed to create user.');
     }
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.findOne(id);
-    
-    Object.assign(user, updateUserDto);
-    
-    // Save updated user
-    return this.usersRepository.save(user);
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    const currentUserId = this.cls.get('userId') as string | undefined;
+
+    if (!currentUserRoles || !currentUserClientId || !currentUserId) {
+        throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+    const isAdmin = currentUserRoles.includes(Role.Admin);
+
+    const userToUpdate = await this.findOne(id);
+
+    if (!isSuperAdmin && userToUpdate.clientId !== currentUserClientId) {
+        throw new ForbiddenException('You do not have permission to update this user.');
+    }
+
+    if (!isSuperAdmin && userToUpdate.roles.includes(Role.SuperAdmin)) {
+        throw new ForbiddenException('You do not have permission to modify a SuperAdmin user.');
+    }
+
+    if (isAdmin && !isSuperAdmin && userToUpdate.roles.includes(Role.Admin) && userToUpdate.id !== currentUserId) {
+        throw new ForbiddenException('Admins cannot modify other Admin users.');
+    }
+
+    const changes: Partial<User> = {};
+
+    if (updateUserDto.clientId !== undefined && updateUserDto.clientId !== userToUpdate.clientId) {
+        if (!isSuperAdmin) {
+            throw new ForbiddenException('Only SuperAdmins can change the client ID.');
+        }
+        changes.clientId = updateUserDto.clientId;
+    }
+
+    if (updateUserDto.roles !== undefined) {
+        const newRoles = updateUserDto.roles;
+        if (!Array.isArray(newRoles) || newRoles.length === 0) {
+             throw new BadRequestException('Roles must be a non-empty array.');
+        }
+        if (!isSuperAdmin) {
+            if (newRoles.includes(Role.SuperAdmin)) {
+                throw new ForbiddenException('Admins cannot assign the SuperAdmin role.');
+            }
+        }
+        changes.roles = newRoles;
+    }
+
+    if (updateUserDto.email !== undefined && updateUserDto.email !== userToUpdate.email) {
+        const existingUser = await this.findOneByEmail(updateUserDto.email, true);
+        if (existingUser && existingUser.id !== userToUpdate.id) {
+            throw new ConflictException('Email address is already registered by another user.');
+        }
+        changes.email = updateUserDto.email;
+   }
+
+    Object.assign(userToUpdate, changes);
+
+    try {
+        return await this.usersRepository.save(userToUpdate);
+    } catch (error) {
+         if (error.code === '23505') {
+            throw new ConflictException('Email address might already be registered.');
+        }
+        throw new InternalServerErrorException('Failed to update user.');
+    }
   }
 
   async remove(id: string): Promise<void> {
-    const user = await this.findOne(id);
-    await this.usersRepository.remove(user);
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    const currentUserId = this.cls.get('userId') as string | undefined;
+
+    if (!currentUserRoles || !currentUserClientId || !currentUserId) {
+        throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+    const isAdmin = currentUserRoles.includes(Role.Admin);
+
+    const userToDelete = await this.findOne(id);
+
+    if (!isSuperAdmin && userToDelete.clientId !== currentUserClientId) {
+        throw new ForbiddenException('You do not have permission to delete this user.');
+    }
+
+    if (userToDelete.roles.includes(Role.SuperAdmin)) {
+        throw new ForbiddenException('SuperAdmin users cannot be deleted.');
+    }
+
+    if (userToDelete.id === currentUserId) {
+        throw new ForbiddenException('You cannot delete your own account using this method.');
+    }
+
+    if (isAdmin && !isSuperAdmin && userToDelete.roles.includes(Role.Admin)) {
+        throw new ForbiddenException('Admins cannot delete other Admin users.');
+    }
+
+    try {
+        await this.usersRepository.remove(userToDelete);
+    } catch (error) {
+        console.error(`Error removing user with ID ${id}:`, error);
+        throw new InternalServerErrorException('Failed to delete user.');
+    }
   }
 
   

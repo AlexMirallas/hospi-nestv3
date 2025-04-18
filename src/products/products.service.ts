@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException,ConflictException } from '@nestjs/common';
 import { InjectRepository, } from '@nestjs/typeorm';
-import { Repository, In, DataSource } from 'typeorm';
+import { Repository, In, DataSource, QueryRunner } from 'typeorm';
 import { Product } from './entities/product.entity';
 import { ProductVariant } from './entities/product-variant.entity';
 import { ProductAttributeValue } from './entities/product-attribute-value.entity';
@@ -24,10 +24,14 @@ import { Role } from '../common/enums/role.enum';
 @Injectable()
 export class ProductsService {
   constructor(
-    private productRepo: ProductRepository,
-    private variantRepo: ProductVariantRepository,
+
+    private ProductRepo: ProductRepository,
+    
+    private VariantRepo: ProductVariantRepository,
+    
     @InjectRepository(ProductAttributeValue)
     private attributeValueRepo: Repository<ProductAttributeValue>,
+
     private attributeValueBaseRepo: AttributeValueRepository,
     private attributeRepo: AttributeRepository,
     private categoryRepository:  CategoryRepository,
@@ -38,8 +42,7 @@ export class ProductsService {
   /**
    * Create a product with variants
    */
-  async create(createProductDto: CreateProductDto): Promise<Product> {
-    
+  async create(createProductDto: CreateProductDto): Promise<Product | undefined> {
     const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
     const currentUserClientId = this.cls.get('clientId') as string | undefined;
 
@@ -51,54 +54,83 @@ export class ProductsService {
     let finalClientId = createProductDto.clientId;
 
     if (isSuperAdmin) {
-      console.log(`SuperAdmin creating product for client ${finalClientId}`);
-  } else if (currentUserRoles.includes(Role.Admin)) {
-      finalClientId = currentUserClientId;
-      console.log(`Admin creating product. Overriding clientId to Admin's client: ${finalClientId}`);
-  } else {
-      throw new ForbiddenException('You do not have permission to create products.');
-  }
+        console.log(`SuperAdmin creating product for client ${finalClientId}`);
+    } else if (currentUserRoles.includes(Role.Admin)) {
+finalClientId = currentUserClientId;
+        console.log(`Admin creating product. Overriding clientId to Admin's client: ${finalClientId}`);
+    } else {
+        throw new ForbiddenException('You do not have permission to create products.');
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     console.log('>>> Received createProductDto:', createProductDto);
+    console.log(`>>> Determined final Client ID: ${finalClientId}`);
 
     try {
-      const product = this.productRepo.create({
+      // 1. Create the product entity using queryRunner.manager
+      // queryRunner.manager.create returns a single entity instance (Product)
+      const product = queryRunner.manager.create(Product, { // Use queryRunner.manager.create
         sku: createProductDto.sku,
         name: createProductDto.name,
         description: createProductDto.description,
         basePrice: createProductDto.basePrice,
         isActive: createProductDto.isActive ?? true,
-        clientId: createProductDto.clientId,
+        clientId: finalClientId, // Use the determined finalClientId
       });
 
+      // 2. Handle categories using queryRunner.manager
       if (createProductDto.categoryIds && createProductDto.categoryIds.length > 0) {
-        const categories = await this.categoryRepository.findBy({
-          id: In(createProductDto.categoryIds)
+        // Fetch categories using the transaction manager to ensure consistency
+        // Note: categoryRepository.findBy might apply tenant filtering based on CLS,
+        // using queryRunner.manager.findBy bypasses that unless manually added.
+        // Ensure categories belong to the finalClientId if Category is tenant-specific.
+        const categories = await queryRunner.manager.findBy(Category, { // Use queryRunner.manager.findBy
+          id: In(createProductDto.categoryIds),
+          clientId: finalClientId
         });
-        
+
         if (categories.length !== createProductDto.categoryIds.length) {
-          throw new BadRequestException('One or more categories not found');
+           // Find which IDs were not found
+           const foundIds = categories.map(c => c.id);
+           const missingIds = createProductDto.categoryIds.filter(id => !foundIds.includes(parseInt(id)));
+           console.error(`Categories not found or inaccessible for client ${finalClientId}: ${missingIds.join(', ')}`);
+           throw new BadRequestException(`One or more categories not found or not accessible: ${missingIds.join(', ')}`);
         }
-        
+
+        // Assign categories - 'product' is correctly typed as Product here
         product.categories = categories;
-      }
 
-      await this.productRepo.save(product);
+      // 3. Save the product using queryRunner.manager
+      // queryRunner.manager.save returns the saved entity (Product)
+      await queryRunner.manager.save(Product, product); // Use queryRunner.manager.save
 
+      // 4. Create variants if provided (pass queryRunner)
       if (createProductDto.variants && createProductDto.variants.length > 0) {
-        await this.createVariantsForProduct(product, createProductDto.variants);
+        // Ensure createVariantsForProduct uses queryRunner.manager internally
+        await this.createVariantsForProduct(product, createProductDto.variants, queryRunner); // Pass queryRunner
       }
 
+      // Commit transaction
       await queryRunner.commitTransaction();
 
+      // Return the product using the standard findOne (which uses the custom repository filtering)
+      // Fetch outside the transaction to get the final state with relations
       return this.findOne(product.id);
+    }
+
     } catch (error) {
         await queryRunner.rollbackTransaction();
-        throw error;
+        console.error("Error during product creation:", error);
+         if (error instanceof BadRequestException || error instanceof ForbiddenException || error instanceof NotFoundException || error instanceof ConflictException) {
+             throw error;
+         }
+         if (error.code === '23505') {
+             throw new ConflictException(`Product creation failed: ${error.detail || 'Duplicate value detected.'}`);
+         }
+        throw new InternalServerErrorException(`Failed to create product: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
@@ -107,87 +139,117 @@ export class ProductsService {
   /**
    * Helper method to create variants for a product
    */
-   async createVariantsForProduct(product: Product, variantDtos: any[]): Promise<void> {
+  private async createVariantsForProduct(product: Product, variantDtos: any[], queryRunner: QueryRunner): Promise<void> {
 
-    const activeAttributes = await this.attributeRepo.find({
-      where: { isActive: true },  
-      relations: { values: true }
-    });
+    // 1. Aggregate all required AttributeValue IDs from all variant DTOs
+    const allAttributeValueIds = variantDtos.flatMap(
+        variantDto => variantDto.attributeValues?.map((av: { attributeValueId: string }) => av.attributeValueId) ?? []
+    ).filter(id => id); // Filter out any potential null/undefined IDs
 
-    const attributeValueIds = variantDtos.flatMap(
-      variant => variant.attributeValues.map(av => av.attributeValueId)
-    );
-    
-
-    const attributeValues = await this.attributeValueBaseRepo.find({
-      where: { id: In(activeAttributes) },
-      relations: {attribute: true }
-    });
-
-    if (attributeValues.length !== new Set(attributeValueIds).size) {
-      throw new BadRequestException('One or more attribute values not found');
+    if (allAttributeValueIds.length === 0 && variantDtos.some(dto => dto.attributeValues?.length > 0)) {
+        throw new BadRequestException('Attribute value IDs are missing in variant DTOs.');
     }
 
-    
-    const attributeValueMap = new Map(
-      attributeValues.map(av => [av.id, av])
-    );
+    let attributeValueMap = new Map<string, AttributeValue>();
 
-    
-    const requiredAttributeIds = new Set(
-      attributeValues.map(av => av.attribute.id)
-    );
+    // 2. Fetch all required AttributeValue entities if any IDs were provided
+    if (allAttributeValueIds.length > 0) {
+        const uniqueAttributeValueIds = [...new Set(allAttributeValueIds)]; // Ensure uniqueness
 
-    // Process each variant
-    for (const variantDto of variantDtos) {
-      // Ensure the variant has all required attributes
-      const variantAttributeIds = new Set(
-        variantDto.attributeValues.map(av => av.attributeId)
-      );
-      
-      // Check if all required attributes are present in this variant
-      if (requiredAttributeIds.size !== variantAttributeIds.size || 
-          ![...requiredAttributeIds].every(id => variantAttributeIds.has(id))) {
-        throw new BadRequestException(
-          `Variant ${variantDto.sku} is missing required attributes. All variants must define values for all attributes.`
-        );
-      }
-
-      // Create the variant
-      const variant = this.variantRepo.create({
-        sku: variantDto.sku,
-        priceAdjustment: variantDto.priceAdjustment || 0,
-        stockQuantity: variantDto.stockQuantity || 0,
-        isActive: variantDto.isActive ?? true,
-        product: product
-      });
-      
-      // Save the variant first to get an ID
-      await this.variantRepo.save(variant);
-      
-      // Create attribute value associations
-      const attributeValueEntities : ProductAttributeValue[] = [];
-      for (const av of variantDto.attributeValues) {
-        const attributeValue = attributeValueMap.get(av.attributeValueId);
-        
-        if (!attributeValue) {
-          throw new BadRequestException(`Attribute value ${av.attributeValueId} not found`);
+        let idsForQuery: (string | number)[];
+        try {
+             // Assuming AttributeValue.id is number, convert for DB query
+             idsForQuery = uniqueAttributeValueIds.map(idStr => {
+                 const num = parseInt(idStr, 10);
+                 if (isNaN(num)) throw new Error(`Invalid attribute value ID format: ${idStr}`);
+                 return num;
+             });
+        } catch (e) {
+             throw new BadRequestException(e.message || 'Invalid attribute value ID format.');
         }
-        
-        // Create the link between variant and attribute value
-        const productAttributeValue = this.attributeValueRepo.create({
-          variant: variant,
-          attributeValue: attributeValue,
-          attribute: attributeValue.attribute
+
+        // Fetch using the transaction's entity manager
+        const fetchedAttributeValues = await queryRunner.manager.find(AttributeValue, {
+            where: {
+                id: In(uniqueAttributeValueIds),
+                clientId: product.clientId
+            },
+            relations: { attribute: true } // Ensure the parent attribute is loaded
         });
-        
-        attributeValueEntities.push(productAttributeValue);
-      }
-      
-      // Save all attribute values for this variant
-      if (attributeValueEntities.length > 0) {
-        await this.attributeValueRepo.save(attributeValueEntities);
-      }
+
+        // Validate that all requested attribute values were found
+        if (fetchedAttributeValues.length !== uniqueAttributeValueIds.length) {
+            const foundDbIds = fetchedAttributeValues.map(av => av.id); // These are numbers from DB
+            // Find which original STRING IDs were not found by converting found DB IDs back to string for comparison
+            const foundDbIdsAsStrings = foundDbIds.map(idNum => idNum.toString());
+            const missingIds = uniqueAttributeValueIds.filter(idStr => !foundDbIdsAsStrings.includes(idStr));
+            console.error(`Attribute values not found or inaccessible for client ${product.clientId}: ${missingIds.join(', ')}`);
+            throw new BadRequestException(`Attribute values not found or inaccessible: ${missingIds.join(', ')}`);
+        }
+
+        // Create a map for easy lookup
+        attributeValueMap = new Map(fetchedAttributeValues.map(av => [av.id.toString(), av]));
+    }
+
+
+    // 3. Loop through each variant DTO to create the variant and its links
+    for (const variantDto of variantDtos) {
+        // Basic validation for the DTO structure
+        if (!variantDto.sku) { // Add other necessary checks
+            throw new BadRequestException('Variant SKU is required.');
+        }
+
+const variant = queryRunner.manager.create(ProductVariant, {
+            sku: variantDto.sku,
+            priceAdjustment: variantDto.priceAdjustment ?? 0,
+            stockQuantity: variantDto.stockQuantity ?? 0,
+            isActive: variantDto.isActive ?? true,
+            clientId: product.clientId, // Assign the parent product's clientId
+            product: { id: product.id } // Link to the parent product by ID
+        });
+
+        // Save the ProductVariant using the transaction's entity manager
+        await queryRunner.manager.save(ProductVariant, variant);
+
+        // Create ProductAttributeValue links if attribute values are provided for this variant
+        const attributeValueEntities: ProductAttributeValue[] = [];
+        if (variantDto.attributeValues && variantDto.attributeValues.length > 0) {
+            const attributeIdsInVariant = new Set<string>();
+
+            for (const dtoAttributeValue of variantDto.attributeValues) {
+                const attributeValueId = dtoAttributeValue.attributeValueId; // This is a STRING
+                if (!attributeValueId) {
+                    // ... error handling ...
+                }
+
+                // --- FIX 3: Lookup uses STRING key (attributeValueId) - Now matches map type ---
+                const currentAttributeValue = attributeValueMap.get(attributeValueId);
+
+                if (!currentAttributeValue) { // This check is now valid (line ~220)
+                    // This should not happen if the initial fetch and validation passed
+                    throw new InternalServerErrorException(`Could not find fetched attribute value for ID: ${attributeValueId}`);
+                }
+                const attributeIdAsString = currentAttributeValue.attribute.id.toString();
+                // ... rest of the loop ...
+                 if (attributeIdsInVariant.has(attributeIdAsString)) {
+                     throw new BadRequestException(`Variant SKU ${variantDto.sku} cannot have multiple values for the same attribute (Attribute ID: ${currentAttributeValue.attribute.id}).`);
+                 }
+                  attributeIdsInVariant.add(attributeIdAsString);
+
+                const productAttributeValue = queryRunner.manager.create(ProductAttributeValue, {
+                     variant: { id: variant.id },
+                     attributeValue: { id: currentAttributeValue.id }, // Use numeric ID here if relation expects number
+                     attribute: { id: currentAttributeValue.attribute.id }, // Use numeric ID here if relation expects number
+                     clientId: product.clientId,
+                 });
+                attributeValueEntities.push(productAttributeValue);
+            }
+
+            // Save all the linking entities for this variant using the transaction's entity manager
+            if (attributeValueEntities.length > 0) {
+                await queryRunner.manager.save(ProductAttributeValue, attributeValueEntities);
+            }
+        }
     }
   }
 
@@ -201,7 +263,7 @@ export class ProductsService {
     const skip = start;
     
     // Build a query builder for more complex queries
-    const queryBuilder = this.productRepo.createQueryBuilder('product')
+    const queryBuilder = this.ProductRepo.createQueryBuilder('product')
       .leftJoinAndSelect('product.categories', 'category')
       .leftJoinAndSelect('product.variants', 'variant')
       .leftJoinAndSelect('variant.attributeValues', 'attrValue')
@@ -227,7 +289,7 @@ export class ProductsService {
             });
           }
           // Handle regular fields
-          else if (this.productRepo.metadata.hasColumnWithPropertyPath(key)) {
+          else if (this.ProductRepo.metadata.hasColumnWithPropertyPath(key)) {
             queryBuilder.andWhere(`product.${key} = :${key}`, { [key]: filters[key] });
           } else {
             console.warn(`Ignoring invalid filter field: ${key}`);
@@ -237,7 +299,7 @@ export class ProductsService {
     }
 
     // Add sorting
-    if (sort && this.productRepo.metadata.hasColumnWithPropertyPath(sort)) {
+    if (sort && this.ProductRepo.metadata.hasColumnWithPropertyPath(sort)) {
       queryBuilder.orderBy(`product.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
     } else {
       // Default sort
@@ -274,7 +336,7 @@ export class ProductsService {
   }
 
   async findOne(id: string): Promise<Product> {
-    const product = await this.productRepo.findOne({ 
+    const product = await this.ProductRepo.findOne({ 
       where: { id },
       relations: {
         categories : true,
@@ -300,12 +362,19 @@ export class ProductsService {
 
   async updateProduct(id: string, updateProductDto: UpdateProductDto): Promise<Product> {
     
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
-      const product = await this.productRepo.findOne({
+      const product = await this.ProductRepo.findOne({
         where: { id },
         relations: {
           categories: true,
@@ -316,12 +385,19 @@ export class ProductsService {
         throw new NotFoundException(`Product with ID ${id} not found`);
       }
       
+      if (!isSuperAdmin && product.clientId !== currentUserClientId) {
+        console.warn(`Admin ${currentUserClientId} attempting to update product ${product.id} owned by client ${product.clientId}.`);
+        throw new ForbiddenException(`You do not have permission to update this product `);
+    }
       // Update basic product fields
-      if (updateProductDto.name) product.name = updateProductDto.name;
-      if (updateProductDto.description !== undefined) product.description = updateProductDto.description;
-      if (updateProductDto.basePrice !== undefined) product.basePrice = updateProductDto.basePrice;
-      if (updateProductDto.isActive !== undefined) product.isActive = updateProductDto.isActive;
-      if (updateProductDto.sku) product.sku = updateProductDto.sku;
+      console.log('>>> Updating product with ID:', id, 'with data:', updateProductDto);
+      queryRunner.manager.merge(Product, product, {
+        name: updateProductDto.name,
+        description: updateProductDto.description,
+        basePrice: updateProductDto.basePrice,
+        isActive: updateProductDto.isActive,
+        sku: updateProductDto.sku,
+    })
 
       // Update categories if provided
       if (updateProductDto.categoryIds) {
@@ -341,160 +417,59 @@ export class ProductsService {
       }
       console.log('>>> Updated product', product);
 
-      await this.productRepo.save(product);
+      await queryRunner.manager.save(Product, product);
       await queryRunner.commitTransaction();
 
       return this.findOne(id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
-      throw error;
+      console.error("Error updating product:", error);
+      if (error instanceof BadRequestException || error instanceof ForbiddenException || error instanceof NotFoundException) {
+          throw error;
+      }
+      if (error.code === '23505') { // Handle unique constraint errors (e.g., SKU)
+          throw new ConflictException(`Product update failed: ${error.detail || 'Duplicate value detected.'}`);
+      }
+      throw new InternalServerErrorException(`Failed to update product: ${error.message}`);
     } finally {
       await queryRunner.release();
     }
   }
-
-  /**
-   * Helper method to update variants for a product
-   */
-  private async updateProductVariants(product: Product, variantDtos: any[]): Promise<void> {
-   
-    const existingVariantIds = product.variants.map(v => v.id);
-    
-    const updateVariantIds = variantDtos
-      .filter(v => v.id)
-      .map(v => v.id);
-    
-    const variantsToDelete = product.variants.filter(
-      variant => !updateVariantIds.includes(variant.id)
-    );
-    
-    // Delete variants that are not in the update
-    if (variantsToDelete.length > 0) {
-      await this.variantRepo.remove(variantsToDelete);
-    }
-    
-    // Process each variant in the update
-    for (const variantDto of variantDtos) {
-      if (variantDto.id) {
-        // Update existing variant
-        const existingVariant = product.variants.find(v => v.id === variantDto.id);
-        if (existingVariant) {
-          // Update basic variant fields
-          if (variantDto.sku) existingVariant.sku = variantDto.sku;
-          if (variantDto.priceAdjustment !== undefined) existingVariant.priceAdjustment = variantDto.priceAdjustment;
-          if (variantDto.stockQuantity !== undefined) existingVariant.stockQuantity = variantDto.stockQuantity;
-          if (variantDto.isActive !== undefined) existingVariant.isActive = variantDto.isActive;
-          
-          await this.variantRepo.save(existingVariant);
-          
-          // Update attribute values if provided
-          if (variantDto.attributeValues && variantDto.attributeValues.length > 0) {
-            await this.updateVariantAttributeValues(existingVariant, variantDto.attributeValues);
-          }
-        }
-      } else {
-        // Create new variant
-        const newVariant = this.variantRepo.create({
-          sku: variantDto.sku,
-          priceAdjustment: variantDto.priceAdjustment || 0,
-          stockQuantity: variantDto.stockQuantity || 0,
-          isActive: variantDto.isActive ?? true,
-          product: product
-        });
-        
-        await this.variantRepo.save(newVariant);
-        
-        // Add attribute values for new variant
-        if (variantDto.attributeValues && variantDto.attributeValues.length > 0) {
-          await this.addAttributeValuesToVariant(newVariant, variantDto.attributeValues);
-        }
-      }
-    }
-  }
-
-  /**
-   * Helper method to update attribute values for a variant
-   */
-  private async updateVariantAttributeValues(variant: ProductVariant, attributeValueDtos: any[]): Promise<void> {
-    
-    const currentAttributeValues = await this.attributeValueRepo.find({
-      where: { variant: { id: variant.id } },
-      relations: {
-        attributeValue: true,
-        attribute: true}
-    });
-    
-   
-    const attributeValueIds = attributeValueDtos.map(av => av.attributeValueId);
-    const attributeValues = await this.attributeValueBaseRepo.find({
-      where: { id: In(attributeValueIds) },
-      relations: {attribute: true}
-    });
-    
-    const attributeValueMap = new Map(attributeValues.map(av => [av.id, av]));
-    
-    // Delete existing attribute values
-    await this.attributeValueRepo.remove(currentAttributeValues);
-    
-    // Add new attribute values
-    await this.addAttributeValuesToVariant(variant, attributeValueDtos);
-  }
-
-  /**
-   * Helper method to add attribute values to a variant
-   */
-  private async addAttributeValuesToVariant(variant: ProductVariant, attributeValueDtos: any[]): Promise<void> {
-    // Get all referenced attribute values
-    const attributeValueIds = attributeValueDtos.map(av => av.attributeValueId);
-    
-    // Fetch all attribute values at once
-    const attributeValues = await this.attributeValueBaseRepo.find({
-      where: { id: In(attributeValueIds) },
-      relations: {attribute: true}
-    });
-    
-    if (attributeValues.length !== attributeValueIds.length) {
-      throw new BadRequestException('One or more attribute values not found');
-    }
-    
-    // Create a map for quick lookup
-    const attributeValueMap = new Map(attributeValues.map(av => [av.id, av]));
-    
-    // Create attribute value associations
-    const attributeValueEntities : ProductAttributeValue[] = [];
-    for (const av of attributeValueDtos) {
-      const attributeValue = attributeValueMap.get(av.attributeValueId);
-      
-      if (!attributeValue) {
-        throw new BadRequestException(`Attribute value ${av.attributeValueId} not found`);
-      }
-      
-      // Create the link between variant and attribute value
-      const productAttributeValue = this.attributeValueRepo.create({
-        variant: variant,
-        attributeValue: attributeValue,
-        attribute: attributeValue.attribute
-      });
-      
-      attributeValueEntities.push(productAttributeValue);
-    }
-    
-    // Save all attribute values for this variant
-    if (attributeValueEntities.length > 0) {
-      await this.attributeValueRepo.save(attributeValueEntities);
-    }
-  }
+  
 
   async remove(id: string): Promise<void> {
-    const product = await this.findOne(id);
-    await this.productRepo.remove(product);
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+    
+    const product = await this.ProductRepo.findOneBy({ id });
+
+    if (!product) {
+      throw new NotFoundException(`Product with ID ${id} not found`);
+    }
+
+    if (!isSuperAdmin && product.clientId !== currentUserClientId) {
+      console.warn(`Admin ${currentUserClientId} attempting to delete product ${product.id} owned by client ${product.clientId}.`);
+      throw new ForbiddenException(`You do not have permission to delete products for client ${product.clientId}.`);
+  }
+    try{
+      await this.ProductRepo.remove(product);
+    }catch(error){
+      console.error("Error deleting product:", error);
+      throw new InternalServerErrorException(`Failed to delete product: ${error.message}`);
+    }
+    
   }
   
+
   /**
    * Find a product variant by ID
    */
   async findVariant(id: string): Promise<ProductVariant> {
-    const variant = await this.variantRepo.findOne({
+    const variant = await this.VariantRepo.findOne({
       where: { id },
       relations: {
         product : true,
@@ -518,7 +493,7 @@ export class ProductsService {
   async updateVariantStock(id: string, quantity: number): Promise<ProductVariant> {
     const variant = await this.findVariant(id);
     variant.stockQuantity = quantity;
-    return this.variantRepo.save(variant);
+    return this.VariantRepo.save(variant);
   }
 
   /**
@@ -526,13 +501,13 @@ export class ProductsService {
    */
 
   async findVariantsByProductId(productId: string): Promise<ProductVariant[]> {
-    const productExists = await this.productRepo.findOneBy({ id: productId });
+    const productExists = await this.ProductRepo.findOneBy({ id: productId });
     if (!productExists) {
       throw new NotFoundException(`Product with ID ${productId} not found.`);
     }
 
    
-    const variants = await this.variantRepo.find({
+    const variants = await this.VariantRepo.find({
       where: {
         product: { id: productId }, 
       },
@@ -561,7 +536,7 @@ export class ProductsService {
     const skip = start;
 
    
-    const queryBuilder = this.variantRepo.createQueryBuilder('variant')
+    const queryBuilder = this.VariantRepo.createQueryBuilder('variant')
         .leftJoinAndSelect('variant.product', 'product') 
         .leftJoinAndSelect('variant.attributeValues', 'pav')
         .leftJoinAndSelect('pav.attributeValue', 'attrValue')
@@ -602,7 +577,7 @@ export class ProductsService {
     }
 
     // --- Sorting ---
-    if (this.variantRepo.metadata.hasColumnWithPropertyPath(sort)) {
+    if (this.VariantRepo.metadata.hasColumnWithPropertyPath(sort)) {
          queryBuilder.orderBy(`variant.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
     } else {
          queryBuilder.orderBy('variant.sku', 'ASC'); // Default sort
@@ -695,7 +670,7 @@ export class ProductsService {
 
       await queryRunner.commitTransaction();
 
-      const createdVariant = await this.variantRepo.findOne({
+      const createdVariant = await this.VariantRepo.findOne({
         where: { id: newVariant.id },
         relations: {
           product: true,
@@ -732,8 +707,14 @@ export class ProductsService {
     variantId: string,
     updateDto: UpdateProductVariantDto,
   ): Promise<ProductVariant> {
-    console.log('>>> Received variantId:', variantId);
-    console.log('>>> Received updateDto:', JSON.stringify(updateDto, null, 2));
+    
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -756,6 +737,11 @@ export class ProductsService {
 
       console.log('>>> Found existing variant:', variant);
 
+      if (!isSuperAdmin && variant.clientId !== currentUserClientId) {
+        console.warn(`Admin ${currentUserClientId} attempting to update variant ${variant.id} owned by client ${variant.clientId}.`);
+        throw new ForbiddenException(`You do not have permission to update this variant `);
+      }
+
       // 2. Update basic variant fields if provided
       if (updateDto.sku !== undefined) variant.sku = updateDto.sku;
       if (updateDto.priceAdjustment !== undefined) variant.priceAdjustment = updateDto.priceAdjustment;
@@ -774,7 +760,7 @@ export class ProductsService {
         const newAttributeValueIds = updateDto.attributeValues.map(av => av.attributeValueId);
         console.log('>>> New attribute value IDs:', newAttributeValueIds);
 
-        // Fetch the new attribute values with their attribute relations
+        
         const newAttributeValues = await queryRunner.manager.find(AttributeValue, {
             where: { id: In(newAttributeValueIds) },
             relations: {
@@ -837,7 +823,7 @@ export class ProductsService {
       await queryRunner.commitTransaction();
 
       // Fetch and return the updated variant with all its relations
-      const updatedVariant = await this.variantRepo.findOne({
+      const updatedVariant = await this.VariantRepo.findOne({
           where: { id: variantId },
           relations: {
               product: true,
@@ -855,6 +841,13 @@ export class ProductsService {
 
     } catch (error) {
       await queryRunner.rollbackTransaction();
+      console.error("Error updating variant:", error);
+      if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+          throw error;
+      }
+      if (error.code === '23505') { // Handle unique constraint errors)
+          throw new ConflictException(`Variant update failed: ${error.detail || 'Duplicate value detected.'}`);
+      }
       throw error;
     } finally {
       await queryRunner.release();
@@ -865,8 +858,23 @@ export class ProductsService {
    * Delete a product variant by ID
    */
   async removeVariant(id: string): Promise<void> {
-    const variant = await this.findVariant(id);
-    await this.variantRepo.remove(variant);
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new InternalServerErrorException('User context not found.');
+    }
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+
+    const variant = await this.VariantRepo.findOneBy({ id });
+    if (!variant) {
+      throw new NotFoundException(`Product variant with ID ${id} not found`);
+    }
+
+    if(!isSuperAdmin && variant.clientId !== currentUserClientId) {
+      console.warn(`Admin ${currentUserClientId} attempting to delete variant ${variant.id} owned by client ${variant.clientId}.`);
+      throw new ForbiddenException(`You do not have permission to delete this variant `);
+    }
+    await this.VariantRepo.remove(variant);
   }
 
 }

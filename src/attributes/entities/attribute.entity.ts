@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index, CreateDateColumn,JoinColumn, UpdateDateColumn, ManyToMany } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, Index, CreateDateColumn,JoinColumn, UpdateDateColumn, ManyToMany, ManyToOne } from 'typeorm';
 import { AttributeValue } from '../entities/attribute-value.entity';
 import { Client } from 'src/clients/entities/client.entity';
 0
@@ -23,7 +23,7 @@ export class Attribute {
   @Column({ name: 'client_id', type: 'uuid', nullable: true })
   clientId: string;
   
-  @ManyToMany(()=> Client, client => client.products)
+  @ManyToOne(()=> Client, client => client.attributes)
   @JoinColumn({ name: 'client_id' })
   client: Client;
 

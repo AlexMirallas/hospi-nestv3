@@ -17,7 +17,7 @@ import { CategoryRepository } from 'src/categories/repositories/category.reposit
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ProductAttributeValue]),
+    TypeOrmModule.forFeature([ProductAttributeValue,Product, ProductVariant]),
     AttributesModule, 
     CategoriesModule,
   ],

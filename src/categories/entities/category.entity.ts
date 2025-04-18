@@ -11,6 +11,7 @@ import {
     JoinTable,
     Index,
     JoinColumn,
+    ManyToOne,
   } from 'typeorm';
   import { Product } from '../../products/entities/product.entity';
   import { Client } from 'src/clients/entities/client.entity';
@@ -60,7 +61,7 @@ import {
     @Column({ name: 'client_id', type: 'uuid', nullable: true })
     clientId: string;
     
-    @ManyToMany(()=> Client, client => client.products)
+    @ManyToOne(()=> Client, client => client.categories)
     @JoinColumn({ name: 'client_id' })
     client: Client;
   

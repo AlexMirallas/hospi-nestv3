@@ -29,7 +29,7 @@ export class AttributeValue {
   @Column({ name: 'client_id', type: 'uuid', nullable: true })
   clientId: string;
   
-  @ManyToMany(()=> Client, client => client.products)
+  @ManyToOne(()=> Client, client => client.attributeValues)
   @JoinColumn({ name: 'client_id' })
   client: Client;
 

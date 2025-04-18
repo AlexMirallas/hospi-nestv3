@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany, JoinColumn, ManyToOne } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
 import { ProductVariant } from './product-variant.entity'; 
 import { Client } from 'src/clients/entities/client.entity';
@@ -37,7 +37,7 @@ export class Product {
   @Column({ name: 'client_id', type: 'uuid', nullable: true })
   clientId: string;
 
-  @ManyToMany(()=> Client, client => client.products)
+  @ManyToOne(()=> Client, client => client.products)
   @JoinColumn({ name: 'client_id' })
   client: Client;
 

@@ -5,17 +5,18 @@ import { Category } from './entities/category.entity';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto,CategoryWithProductCount } from './dto/update-category.dto';
 import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
+import { CategoryRepository } from './repositories/category.repository';
 
 @Injectable()
 export class CategoriesService {
   constructor(
-    @InjectRepository(Category)
-    private repo: Repository<Category>
+    private readonly CategoryRepo: CategoryRepository,
+    
   ) {}
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
-    const category = this.repo.create(createCategoryDto);
-    return this.repo.save(category);
+    const category = this.CategoryRepo.create(createCategoryDto);
+    return this.CategoryRepo.save(category);
   }
 
   async findAllSimpleRest(
@@ -29,7 +30,7 @@ export class CategoriesService {
     
     const orderOptions: FindOptionsOrder<Category> = {};
     if (sort) {
-      if (this.repo.metadata.hasColumnWithPropertyPath(sort)) {
+      if (this.CategoryRepo.metadata.hasColumnWithPropertyPath(sort)) {
         orderOptions[sort] = order.toUpperCase() as 'ASC' | 'DESC';
       } else {
         console.warn(`Ignoring invalid sort field: ${sort}`);
@@ -70,7 +71,7 @@ export class CategoriesService {
       }
   }
     
-    const [data, totalCount] = await this.repo.findAndCount({
+    const [data, totalCount] = await this.CategoryRepo.findAndCount({
       where: whereOptions,
       order: orderOptions,
       take: take,
@@ -85,7 +86,7 @@ export class CategoriesService {
   }
 
   async findOne(id: number): Promise<Category> {
-    const category = await this.repo.findOne({ 
+    const category = await this.CategoryRepo.findOne({ 
       where: { id },
       relations: {
         parent: true,
@@ -106,18 +107,18 @@ export class CategoriesService {
     
     Object.assign(category, updateCategoryDto);
     
-    return this.repo.save(category);
+    return this.CategoryRepo.save(category);
   }
 
   async remove(id: number): Promise<void> {
     const category = await this.findOne(id);
-    await this.repo.remove(category);
+    await this.CategoryRepo.remove(category);
   }
 
 
   async getCategoryTree(): Promise<Category[]> {
     // Get all categories
-    const categories = await this.repo.find({
+    const categories = await this.CategoryRepo.find({
       relations: {
         parent: true,
         children: true, 
@@ -138,7 +139,7 @@ export class CategoriesService {
     const take = end - start + 1;
     const skip = start;
 
-    const queryBuilder = this.repo.createQueryBuilder('category');
+    const queryBuilder = this.CategoryRepo.createQueryBuilder('category');
     queryBuilder.leftJoin('category.products', 'product');
 
    
@@ -167,7 +168,7 @@ export class CategoriesService {
 
     // sorting
     const sortField = sort === 'productCount' ? 'productCount' : `category.${sort}`;
-    if (this.repo.metadata.hasColumnWithPropertyPath(sort) || sort === 'productCount') {
+    if (this.CategoryRepo.metadata.hasColumnWithPropertyPath(sort) || sort === 'productCount') {
         queryBuilder.orderBy(sortField, order.toUpperCase() as 'ASC' | 'DESC');
     } else {
         queryBuilder.orderBy('category.name', 'ASC'); // Default sort

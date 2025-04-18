@@ -106,7 +106,7 @@ export class ProductsController {
 
   @Put(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.SuperAdmin)
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async update(
     @Param('id', ParseUUIDPipe) id: string, 
@@ -117,7 +117,7 @@ export class ProductsController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.SuperAdmin)
   async remove(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     await this.productsService.remove(id);
     res.status(HttpStatus.NO_CONTENT).send();
@@ -131,7 +131,7 @@ export class ProductsController {
 
   @Put('variants/:id/stock')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin)
+  @Roles(Role.Admin, Role.SuperAdmin)
   async updateVariantStock(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('quantity') quantity: number

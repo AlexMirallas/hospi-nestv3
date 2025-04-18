@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateAttributeDto {
     @IsString()
@@ -13,4 +13,8 @@ export class CreateAttributeDto {
     @IsBoolean()
     @IsNotEmpty()
     isActive: boolean;
+
+    @IsOptional()
+    @IsUUID()
+    clientId?: string;
 }

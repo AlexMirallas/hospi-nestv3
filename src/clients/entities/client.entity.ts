@@ -6,6 +6,7 @@ import { Attribute } from '../../attributes/entities/attribute.entity';
 import { ProductVariant } from 'src/products/entities/product-variant.entity';
 import { AttributeValue } from 'src/attributes/entities/attribute-value.entity';
 import { Status } from 'src/common/enums/status.enum';
+import { ProductAttributeValue } from 'src/products/entities/product-attribute-value.entity';
 
 @Entity('clients')
 export class Client {
@@ -41,6 +42,9 @@ export class Client {
 
   @OneToMany(()=> AttributeValue, attributeValue => attributeValue.client)
   attributeValues: AttributeValue[];
+
+  @OneToMany(() => Product, product => product.client)
+  productAttributeValues: ProductAttributeValue[];
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
