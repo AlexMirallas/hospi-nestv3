@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, IsNumber,IsOptional,Matches,IsHexColor, Min } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, IsNumber,IsOptional,Matches,IsHexColor, Min, IsUUID } from 'class-validator';
 
 export class CreateAttributeValueDto {
     @IsString()
@@ -21,7 +21,9 @@ export class CreateAttributeValueDto {
     @IsNumber()
     @IsNotEmpty()
     @Min(0)
-    position?: number; 
+    position?: number;
 
-    
+    @IsOptional()
+    @IsUUID()
+    clientId?: string; 
 }

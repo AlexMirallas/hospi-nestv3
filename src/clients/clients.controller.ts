@@ -38,11 +38,12 @@ import {
   
     @Get()
     async findAll(
-        @Query(new ValidationPipe({ transform: true, whitelist: true })) params: SimpleRestParams,
-       @Res({ passthrough: true }) res: Response, 
+      @Query(new ValidationPipe({ transform: true, whitelist: true })) params: SimpleRestParams,
+      @Res({ passthrough: true }) res: Response, 
     ) {
       const { data, totalCount } = await this.clientsService.findAllSimpleRest(params);
-      const { start = 0, end = data.length -1 } = params;
+      const start = params.start ?? 0;
+      const end = data.length > 0 ? start + data.length - 1 : start;
       res.set('Content-Range', `clients ${start}-${end}/${totalCount}`);
       return data; 
     }

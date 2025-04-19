@@ -133,7 +133,6 @@ export class CategoryRepository { // No longer extends BaseRepository
     async save<T extends DeepPartial<Category>>(entity: T, options?: SaveOptions): Promise<T>
     async save<T extends DeepPartial<Category>>(entities: T[], options?: SaveOptions): Promise<T[]>
     async save<T extends DeepPartial<Category>>(entityOrEntities: T | T[], options?: SaveOptions): Promise<T | T[]> {
-        // TenantSubscriber should handle clientId on insert if not set by service
         return this.repository.save(entityOrEntities as any, options);
     }
 

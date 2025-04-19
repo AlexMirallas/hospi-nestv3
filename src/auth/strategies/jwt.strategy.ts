@@ -33,7 +33,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     this.cls.set('clientId', payload.clientId);
-    this.cls.set('userRoles', payload.roles); 
+    this.cls.set('userRoles', payload.roles);
+    this.cls.set('userId', payload.sub);
+    this.cls.set('userEmail', payload.email); 
 
     const user = await this.usersService.findOne(payload.sub); 
     if (!user) {

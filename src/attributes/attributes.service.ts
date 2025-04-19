@@ -28,7 +28,7 @@ export class AttributesService {
     const currentUserClientId = this.cls.get('clientId') || null;
 
     if(!currentUserRoles || !currentUserClientId){
-      throw new InternalServerErrorException("No user context found.");
+      throw new InternalServerErrorException("No user context found. In Attributes service.");
     }
 
     const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
@@ -163,16 +163,58 @@ export class AttributesService {
 export class AttributeValuesService {
   constructor(
     private AttributeValueRepo: AttributeValueRepository,
+    private dataSource: DataSource,
+    private readonly cls: ClsService,
   ) {}
 
   async create(createDto: CreateAttributeValueDto): Promise<AttributeValue> {
-    const attributeValue = this.AttributeValueRepo.create(createDto);
-    return this.AttributeValueRepo.save(attributeValue);
+
+    const currentUserRoles = this.cls.get('userRoles') || [];
+    const currentUserClientId = this.cls.get('clientId') || null;
+
+    if(!currentUserRoles || !currentUserClientId){
+      throw new InternalServerErrorException("No user context found. In AttributeValues service.");
+    }
+
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+    console.log("Current user roles:", currentUserRoles);
+    console.log(isSuperAdmin)
+    let finalClientId = createDto.clientId;
+
+    if(isSuperAdmin){
+      console.log("Superadmin creating attribute value for client", createDto.clientId);
+    }else if (currentUserRoles.includes(Role.Admin)) {
+      finalClientId = currentUserClientId;
+      console.log("Admin creating attribute value for client", finalClientId);
+    }else{
+      throw new ForbiddenException("No permission to create attribute value for this client.");
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      const attributeValue = this.AttributeValueRepo.create({
+        ...createDto,
+        clientId: finalClientId, 
+      });
+      await queryRunner.manager.save(attributeValue);
+      await queryRunner.commitTransaction();
+      return attributeValue;
+    }
+    catch (error) {
+      await queryRunner.rollbackTransaction();
+      console.error("Error during attribute value creation:", error);
+      throw error;
+    }
+    finally {
+      await queryRunner.release();
+    }
   }
 
   async findAllSimpleRest(
     params: SimpleRestParams,
-  ): Promise<{ data: AttributeValue[]; total: number }> { // Changed totalCount to total
+  ): Promise<{ data: AttributeValue[]; total: number }> {
     const { start = 0, end = 9, sort="id", order = 'ASC', filters = {} } = params;
 
     const take = end - start + 1;

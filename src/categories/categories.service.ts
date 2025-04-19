@@ -6,15 +6,32 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto,CategoryWithProductCount } from './dto/update-category.dto';
 import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
 import { CategoryRepository } from './repositories/category.repository';
+import { ClsService } from 'nestjs-cls';
+import { Role } from '../common/enums/role.enum'; 
 
 @Injectable()
 export class CategoriesService {
   constructor(
-    private readonly CategoryRepo: CategoryRepository,
-    
+    private  CategoryRepo: CategoryRepository,
+    private readonly cls: ClsService,
   ) {}
 
   async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
+
+    const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const currentUserClientId = this.cls.get('clientId') as string | undefined;
+
+    if (!currentUserRoles || !currentUserClientId) {
+      throw new NotFoundException('User context not found. In categories service');
+    }
+
+    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
+
+    if (!isSuperAdmin) {
+      createCategoryDto.clientId = currentUserClientId;
+    }
+
+
     const category = this.CategoryRepo.create(createCategoryDto);
     return this.CategoryRepo.save(category);
   }

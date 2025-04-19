@@ -9,7 +9,6 @@ import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; // Ad
 @Injectable()
 export class ClientsService {
   constructor(
-
     @InjectRepository(Client)
     private readonly clientRepository: Repository<Client>,
   ) {}
@@ -19,10 +18,6 @@ export class ClientsService {
     return this.clientRepository.save(client);
   }
 
-  async findAll(): Promise<Client[]> {
-    
-    return this.clientRepository.find();
-  }
 
   async findAllSimpleRest(
     params: SimpleRestParams,
@@ -35,10 +30,26 @@ export class ClientsService {
 
    
     for (const key in filters) {
+      console.log(`Filter key: ${key}, value: ${filters[key]}`);
       if (Object.prototype.hasOwnProperty.call(filters, key) && filters[key] !== undefined && filters[key] !== null) {
-        if (this.clientRepository.metadata.hasColumnWithPropertyPath(key)) {
-           qb.andWhere(`client.${key} ILIKE :${key}Value`, { [`${key}Value`]: `%${filters[key]}%` });
-        } else {
+        if (key === 'status') {
+          if (this.clientRepository.metadata.hasColumnWithPropertyPath(key)) {
+             qb.andWhere(`client.status = :statusValue`, { statusValue: filters[key] });
+             console.log(`Applied exact match filter for status: ${filters[key]}`); 
+          } else {
+             console.warn(`Filter key 'status' provided but not found as a column on Client entity.`);
+          }
+        }
+
+        else if (this.clientRepository.metadata.hasColumnWithPropertyPath(key)) {
+          
+           if (key === 'name') { 
+                qb.andWhere(`client.${key} ILIKE :${key}Value`, { [`${key}Value`]: `%${filters[key]}%` });
+           }else if (key === 'subdomain') {
+               qb.andWhere(`client.${key} ILIKE :${key}Value`, { [`${key}Value`]: `%${filters[key]}%` }); 
+           }
+        }
+        else {
            console.warn(`Ignoring invalid filter field for clients: ${key}`);
         }
       }

@@ -10,8 +10,8 @@ export interface ITenantSpecificEntity {
 
 export abstract class BaseRepository<T extends ITenantSpecificEntity> extends Repository<T> {
   
-  // We make it public for simplicity here, but it could be protected
-  public cls!: ClsService;
+  
+  protected cls!: ClsService;
 
   
   private getTenantCondition(alias: string): { condition: string; parameters: ObjectLiteral } | null {

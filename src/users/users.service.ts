@@ -7,6 +7,7 @@ import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
 import { UserRepository } from './repositories/user.repository';
 import { ClsService } from 'nestjs-cls';
 import { Roles } from 'src/common/decorators/roles.decorators';
+import * as bcrypt from 'bcrypt';
 
 
 @Injectable()
@@ -177,7 +178,7 @@ async findAllSimpleRest(
     const currentUserId = this.cls.get('userId') as string | undefined;
 
     if (!currentUserRoles || !currentUserClientId || !currentUserId) {
-        throw new InternalServerErrorException('User context not found.');
+        throw new InternalServerErrorException('User context not found. update');
     }
     const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
     const isAdmin = currentUserRoles.includes(Role.Admin);
@@ -187,11 +188,9 @@ async findAllSimpleRest(
     if (!isSuperAdmin && userToUpdate.clientId !== currentUserClientId) {
         throw new ForbiddenException('You do not have permission to update this user.');
     }
-
     if (!isSuperAdmin && userToUpdate.roles.includes(Role.SuperAdmin)) {
         throw new ForbiddenException('You do not have permission to modify a SuperAdmin user.');
     }
-
     if (isAdmin && !isSuperAdmin && userToUpdate.roles.includes(Role.Admin) && userToUpdate.id !== currentUserId) {
         throw new ForbiddenException('Admins cannot modify other Admin users.');
     }
@@ -222,14 +221,26 @@ async findAllSimpleRest(
         const existingUser = await this.findOneByEmail(updateUserDto.email, true);
         if (existingUser && existingUser.id !== userToUpdate.id) {
             throw new ConflictException('Email address is already registered by another user.');
-        }
+       }
         changes.email = updateUserDto.email;
-   }
+    }
+
+    if (updateUserDto.password) {
+        changes.password = await bcrypt.hash(updateUserDto.password, 10);
+    }
+
+    const allowedOtherFields: (keyof UpdateUserDto)[] = ['firstName', 'lastName', 'phone', 'roles'];
+    for (const key of allowedOtherFields) {
+        if (updateUserDto[key] !== undefined) {
+            changes[key as keyof Partial<User>] = updateUserDto[key] as any;
+        }
+    }
 
     Object.assign(userToUpdate, changes);
 
     try {
-        return await this.usersRepository.save(userToUpdate);
+        const updatedUser = await this.usersRepository.save(userToUpdate);
+        return updatedUser;
     } catch (error) {
          if (error.code === '23505') {
             throw new ConflictException('Email address might already be registered.');
@@ -238,16 +249,22 @@ async findAllSimpleRest(
     }
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<User> {
     const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
     const currentUserClientId = this.cls.get('clientId') as string | undefined;
     const currentUserId = this.cls.get('userId') as string | undefined;
 
+    console.log('Current user roles:', currentUserRoles);
+    console.log('Current user client ID:', currentUserClientId);
+    console.log('Current user ID:', currentUserId);
+    console.log('User ID to delete:', id);
+
+    const isSuperAdmin = currentUserRoles?.includes(Role.SuperAdmin);
+    const isAdmin = currentUserRoles?.includes(Role.Admin);
+
     if (!currentUserRoles || !currentUserClientId || !currentUserId) {
-        throw new InternalServerErrorException('User context not found.');
+      throw new InternalServerErrorException('User context not found. You are here');
     }
-    const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
-    const isAdmin = currentUserRoles.includes(Role.Admin);
 
     const userToDelete = await this.findOne(id);
 
@@ -269,6 +286,7 @@ async findAllSimpleRest(
 
     try {
         await this.usersRepository.remove(userToDelete);
+        return userToDelete;
     } catch (error) {
         console.error(`Error removing user with ID ${id}:`, error);
         throw new InternalServerErrorException('Failed to delete user.');
