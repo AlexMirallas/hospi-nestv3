@@ -37,7 +37,7 @@ import { Client } from './clients/entities/client.entity';
         username: configService.get<string>('DATABASE_USERNAME'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Product, Attribute, AttributeValue, Category,ProductVariant,Client], 
+        entities: [User, Product, Attribute, AttributeValue, Category, ProductVariant, Client], 
         synchronize: true, 
         autoLoadEntities: true, 
       }),
