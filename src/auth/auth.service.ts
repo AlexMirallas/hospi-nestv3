@@ -37,6 +37,8 @@ export class AuthService {
     const payload: JwtPayload = {
       email: user.email,
       sub: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
       roles: user.roles,
       clientId: user.clientId,
      };
@@ -77,8 +79,10 @@ export class AuthService {
     }
 
     const payload: JwtPayload = {
-      email: newUser.email,
       sub: newUser.id,
+      email: newUser.email,
+      firstName: newUser.firstName,
+      lastName: newUser.lastName,
       roles: newUser.roles,
       clientId: newUser.clientId,
     };

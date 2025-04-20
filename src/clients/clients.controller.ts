@@ -21,7 +21,6 @@ import {
   import { RolesGuard } from '../common/guards/roles.guard'; 
   import { Roles } from '../common/decorators/roles.decorators'; 
   import { Role } from '../common/enums/role.enum'; 
-  import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
   import { Response } from 'express';
   
   @Controller('clients')
@@ -38,13 +37,28 @@ import {
   
     @Get()
     async findAll(
-      @Query(new ValidationPipe({ transform: true, whitelist: true })) params: SimpleRestParams,
+      @Query('filter') filterString: string = '{}',
+      @Query('range') rangeString: string = '[0,9]',
+      @Query('sort') sortString: string = '["id","ASC"]',
       @Res({ passthrough: true }) res: Response, 
     ) {
-      const { data, totalCount } = await this.clientsService.findAllSimpleRest(params);
-      const start = params.start ?? 0;
-      const end = data.length > 0 ? start + data.length - 1 : start;
-      res.set('Content-Range', `clients ${start}-${end}/${totalCount}`);
+      const filter = JSON.parse(filterString);
+      const range = JSON.parse(rangeString);
+      const sort = JSON.parse(sortString);
+
+      const [start, end] = range;
+      const [sortField, sortOrder] = sort;
+
+      const { data, totalCount } = await this.clientsService.findAllSimpleRest({
+        start,
+        end,
+        sort: sortField,
+        order: sortOrder,
+        filters: filter,
+      });
+
+      res.header('Content-Range', `clients ${start}-${Math.min(end, totalCount - 1)}/${totalCount}`);
+      res.header('Access-Control-Expose-Headers', 'Content-Range');
       return data; 
     }
   
