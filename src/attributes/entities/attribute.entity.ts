@@ -10,8 +10,7 @@ export class Attribute {
   @Column({ type: 'int', nullable: false })
   position: number; 
 
-  @Index({ unique: true })
-  @Column({ type: 'varchar', length: 100, unique: true })
+  @Column({ type: 'varchar', length: 100, })
   name: string; // e.g., 'Color', 'Size'
 
   @OneToMany(() => AttributeValue, (value) => value.attribute)

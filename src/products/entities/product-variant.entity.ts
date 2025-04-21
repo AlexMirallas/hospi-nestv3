@@ -17,7 +17,7 @@ import {
 
   
   @Entity('product_variants')
-  @Unique(['product', 'sku']) // Ensure SKU is unique within a product
+  @Unique(['clientId', 'sku']) 
   export class ProductVariant {
     @PrimaryGeneratedColumn('uuid')
     id: string;

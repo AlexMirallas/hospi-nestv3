@@ -22,11 +22,11 @@ import {
     @PrimaryGeneratedColumn()
     id: number;
   
-    @Index({ unique: true })
-    @Column({ type: 'varchar', length: 255, unique: true })
+
+    @Column({ type: 'varchar', length: 255, nullable: false })
     name: string;
   
-    @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
+    @Column({ type: 'varchar', length: 255, nullable: true })
     @Index()
     slug: string; 
   

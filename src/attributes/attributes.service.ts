@@ -266,13 +266,24 @@ export class AttributeValuesService {
                  whereOptions.attributeId = parseInt(idValue); 
              }
         }
+        
          else if (this.AttributeValueRepo.metadata.hasColumnWithPropertyPath(key)) {
             if (typeof filterValue === 'string') {
               whereOptions[key] = ILike(`%${filterValue}%`); 
             } else {
                  whereOptions[key] = filterValue;
             }
-        } else {
+        } 
+        
+        else if (key ==="clientId"){
+          const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue;
+          console.log("Client ID filter value:", idValue);
+          if (typeof idValue === 'string') {
+            whereOptions.clientId = idValue; 
+          }
+        }
+        
+        else {
           console.warn(`findAllSimpleRest (AttributeValue): Ignoring invalid filter field: ${key}`);
         }
       }

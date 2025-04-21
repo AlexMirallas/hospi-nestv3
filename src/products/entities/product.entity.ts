@@ -1,16 +1,16 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany, JoinColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, Index, ManyToMany, JoinColumn, ManyToOne, Unique } from 'typeorm';
 import { Category } from '../../categories/entities/category.entity';
 import { ProductVariant } from './product-variant.entity'; 
 import { Client } from 'src/clients/entities/client.entity';
 
 @Entity('products')
+@Unique(['clientId', 'sku'])
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Index({ unique: true })
-  @Column({ type: 'varchar', length: 255, unique: true })
-  sku: string; //  Stock Keeping Unit
+  @Column({ type: 'varchar', length: 255, })
+  sku: string; 
 
   @Column({ type: 'varchar', length: 255 })
   name: string;
