@@ -241,8 +241,15 @@ export class AttributeValuesService {
       ) {
         const filterValue = filters[key];
 
-        
-        if (key === 'id') { 
+         if (key ==="clientId"){
+          const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue;
+          console.log("Client ID filter value:", idValue);
+          if (typeof idValue === 'string') {
+            whereOptions.clientId = idValue; 
+          }
+        }
+
+        else if (key === 'id') { 
           if (Array.isArray(filterValue) && filterValue.length > 0) {
              const parsedIds = filterValue.map(id => parseInt(String(id), 10)).filter(id => !isNaN(id));
              if (parsedIds.length > 0) {

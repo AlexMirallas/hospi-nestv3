@@ -14,6 +14,7 @@ import { ProductVariantRepository } from './repositories/product-variant.reposit
 import { AttributeRepository } from 'src/attributes/repositories/attribute.repository';
 import { AttributeValueRepository } from 'src/attributes/repositories/attribute-value.repository';
 import { CategoryRepository } from 'src/categories/repositories/category.repository';
+import { ProductVariantService } from './product-variant.service';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { CategoryRepository } from 'src/categories/repositories/category.reposit
     CategoriesModule,
   ],
   controllers: [ProductsController,VariantsController],
-  providers: [ProductsService,SimpleRestContentRangeInterceptor,ProductRepository,ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository],
-  exports: [ProductsService, ProductRepository, ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository], 
+  providers: [ProductsService,ProductVariantService, SimpleRestContentRangeInterceptor,ProductRepository,ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository],
+  exports: [ProductsService,ProductVariantService, ProductRepository, ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository], 
 })
 export class ProductsModule {}

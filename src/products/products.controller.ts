@@ -86,15 +86,6 @@ export class ProductsController {
     }
   }
 
-  @Get('variants')
-  async findVariantsForProduct(
-    @Param('productId', ParseUUIDPipe) productId: string,
-  ): Promise<ProductVariant[]> {
-      
-      const variants = await this.productsService.findVariantsByProductId(productId);
-      return variants; 
-     
-  }
 
 
   @Get(':id')
@@ -105,8 +96,6 @@ export class ProductsController {
   
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin, Role.SuperAdmin)
   @UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
   async update(
     @Param('id', ParseUUIDPipe) id: string, 
@@ -116,30 +105,9 @@ export class ProductsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin, Role.SuperAdmin)
   async remove(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     await this.productsService.remove(id);
     res.status(HttpStatus.NO_CONTENT).send();
   }
 
- 
-  @Get('variants/:id')
-  async findVariant(@Param('id', ParseUUIDPipe) id: string) {
-    return this.productsService.findVariant(id);
-  }
-
-  @Put('variants/:id/stock')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin, Role.SuperAdmin)
-  async updateVariantStock(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body('quantity') quantity: number
-  ) {
-    if (isNaN(quantity) || quantity < 0) {
-      throw new BadRequestException('Quantity must be a non-negative number');
-    }
-    
-    return this.productsService.updateVariantStock(id, quantity);
-  }
 }

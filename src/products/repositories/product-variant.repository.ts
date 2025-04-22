@@ -7,7 +7,7 @@ import { Repository,FindOptionsWhere, SelectQueryBuilder,ObjectLiteral, FindOneO
 @Injectable()
 export class ProductVariantRepository {
     constructor(
-        @InjectRepository(ProductVariant) // Inject standard repository
+        @InjectRepository(ProductVariant) 
         private readonly repository: Repository<ProductVariant>,
         private readonly cls: ClsService, 
     ) {}
@@ -125,6 +125,11 @@ export class ProductVariantRepository {
         return this.repository.count({ ...options, where });
     }
 
+    async findVariantById(id: string): Promise<ProductVariant | null> {
+        const tenantCondition = this.getTenantCondition(this.repository.metadata.tableName);
+        const where = this.addTenantWhere({ id }, tenantCondition?.parameters.clientId);
+        return this.repository.findOneBy(where || {});
+    }
     
 
 }
