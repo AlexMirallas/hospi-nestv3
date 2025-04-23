@@ -12,6 +12,7 @@ import {
   Res,
   Put,
   UseInterceptors,
+  HttpStatus,
 } from '@nestjs/common';
 import { AttributesService } from './attributes.service';
 import { CreateAttributeDto } from './dto/create-attribute.dto';
@@ -37,7 +38,7 @@ export class AttributesController {
   constructor(private readonly attributesService: AttributesService) {}
 
   @Post()
-  create(@Body() createAttributeDto: CreateAttributeDto) {
+  async create(@Body() createAttributeDto: CreateAttributeDto) {
     return this.attributesService.create(createAttributeDto);
   }
 
@@ -83,18 +84,19 @@ export class AttributesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string) {
     return this.attributesService.findOne(+id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateAttributeDto: UpdateAttributeDto) {
+  async update(@Param('id') id: string, @Body() updateAttributeDto: UpdateAttributeDto) {
     return this.attributesService.update(+id, updateAttributeDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.attributesService.remove(+id);
+  async remove(@Param('id') id: number, @Res() res: Response) {
+    await this.attributesService.remove(id);
+    res.status(HttpStatus.NO_CONTENT).send();
   }
 }
 
@@ -109,7 +111,7 @@ export class AttributeValuesController {
   constructor(private readonly attributeValuesService: AttributeValuesService) {}
 
   @Post()
-  create(@Body() createDto: CreateAttributeValueDto) {
+  async create(@Body() createDto: CreateAttributeValueDto) {
     console.log('Creating attribute value:', createDto);
     return this.attributeValuesService.create(createDto);
   }
@@ -154,17 +156,18 @@ export class AttributeValuesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
+  async findOne(@Param('id') id: string) {
     return this.attributeValuesService.findOne(+id);
   }
 
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateDto: UpdateAttributeValueDto) {
+  async update(@Param('id') id: string, @Body() updateDto: UpdateAttributeValueDto) {
     return this.attributeValuesService.update(+id, updateDto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.attributeValuesService.remove(+id);
+  async remove(@Param('id') id: string, @Res() res: Response) {
+    await this.attributeValuesService.remove(+id);
+    res.status(HttpStatus.NO_CONTENT).send();
   }
 }

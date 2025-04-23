@@ -46,7 +46,6 @@ import { Client } from 'src/clients/entities/client.entity';
     @Column({ name: 'client_id', type: 'uuid', nullable: true })
     clientId: string;
 
-  
     @CreateDateColumn()
     createdAt: Date;
   

@@ -437,7 +437,7 @@ finalClientId = currentUserClientId;
   }
   
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string): Promise<Product> {
     const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
     const currentUserClientId = this.cls.get('clientId') as string | undefined;
     if (!currentUserRoles || !currentUserClientId) {
@@ -460,7 +460,9 @@ finalClientId = currentUserClientId;
     }catch(error){
       console.error("Error deleting product:", error);
       throw new InternalServerErrorException(`Failed to delete product: ${error.message}`);
+    }finally{
+      console.log(`Product with ID ${id} deleted successfully`);
+      return product;
     }
-    
   }
 }

@@ -20,17 +20,17 @@ import { Role } from '../../common/enums/role.enum';
 export class ProductRepository {
     constructor(
         @InjectRepository(Product)
-        private readonly repository: Repository<Product>, // Inject standard repository
+        private readonly repository: Repository<Product>, 
         private readonly cls: ClsService,
     ) {}
 
-    // --- Tenant Filtering Logic ---
+  
     private getTenantCondition(alias?: string): { condition: string; parameters: ObjectLiteral } | null {
         const clientId = this.cls.get('clientId');
         const userRoles = this.cls.get('userRoles') as Role[] | undefined;
 
         if (userRoles?.includes(Role.SuperAdmin)) {
-            return null; // SuperAdmin sees all
+            return null; 
         }
 
         if (!clientId) {

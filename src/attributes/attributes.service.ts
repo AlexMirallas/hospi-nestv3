@@ -151,9 +151,20 @@ export class AttributesService {
     return this.AttributeRepo.save(attribute);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number): Promise<Attribute> {
     const attribute = await this.findOne(id);
-    await this.AttributeRepo.remove(attribute);
+    try {
+      await this.AttributeRepo.remove(attribute);
+    }
+    catch (error) {
+      console.error("Error during attribute removal:", error);
+      throw new InternalServerErrorException("Error during attribute removal");
+    }
+    finally {
+      console.log("Attribute removed successfully:", id);
+      return attribute; 
+    }
+
   }
 }
 
@@ -338,8 +349,18 @@ export class AttributeValuesService {
     return this.AttributeValueRepo.save(attributeValue);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number): Promise<AttributeValue> {
     const attributeValue = await this.findOne(id);
-    await this.AttributeValueRepo.remove(attributeValue);
+    try{
+      await this.AttributeValueRepo.remove(attributeValue);
+    }
+    catch (error) {
+      console.error("Error during attribute value removal:", error);
+      throw new InternalServerErrorException("Error during attribute value removal");
+    }
+    finally {
+      console.log("Attribute value removed successfully:", id);
+      return attributeValue;
+    }
   }
 }

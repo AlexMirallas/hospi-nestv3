@@ -17,7 +17,7 @@ export abstract class BaseRepository<T extends ITenantSpecificEntity> extends Re
   private getTenantCondition(alias: string): { condition: string; parameters: ObjectLiteral } | null {
     const clientId = this.cls.get('clientId');
     const userRoles = this.cls.get('userRoles') as Role[] | undefined; 
-    console.log(userRoles, clientId, "Client ID in Base Repository");
+
     
     if (userRoles?.includes(Role.SuperAdmin)) {
       return null; 

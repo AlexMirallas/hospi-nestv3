@@ -145,10 +145,8 @@ export class ProductVariantService {
         }
 
 
-        // --- Pagination ---
         queryBuilder.skip(skip).take(take);
-
-        // --- Execution ---
+     
         const [data, total] = await queryBuilder.getManyAndCount();
 
         return { data, total };

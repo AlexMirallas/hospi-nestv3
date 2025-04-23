@@ -61,7 +61,7 @@ export class AuthService {
     
     const createUserDto: CreateUserDto = {
         ...signUpDto,
-        roles: [Role.SuperAdmin], // to change in the future when having a proper method to assign roles
+        roles: [Role.SuperAdmin], 
         clientId: defaultClientId,
       };
 

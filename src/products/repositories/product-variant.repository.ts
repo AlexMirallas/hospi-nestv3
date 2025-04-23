@@ -3,6 +3,7 @@ import { ProductVariant } from "../entities/product-variant.entity";
 import { ClsService } from "nestjs-cls";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository,FindOptionsWhere, SelectQueryBuilder,ObjectLiteral, FindOneOptions, FindManyOptions } from "typeorm";
+import { Role } from "src/common/enums/role.enum";
 
 @Injectable()
 export class ProductVariantRepository {
@@ -14,9 +15,9 @@ export class ProductVariantRepository {
 
     private getTenantCondition(alias?: string): { condition: string; parameters: ObjectLiteral  } | null {
         const clientId = this.cls.get("clientId");
-        const userRoles = this.cls.get("userRoles") as string[] | undefined; // Adjusted to string[] for simplicity
+        const userRoles = this.cls.get("userRoles") as Role[] | undefined; 
 
-        if (userRoles?.includes("SuperAdmin")) {
+        if (userRoles?.includes(Role.SuperAdmin)) {
             return null; 
         }
 
@@ -123,12 +124,6 @@ export class ProductVariantRepository {
         const tenantCondition = this.getTenantCondition(this.repository.metadata.tableName);
         const where = this.addTenantWhere(options?.where, tenantCondition?.parameters.clientId);
         return this.repository.count({ ...options, where });
-    }
-
-    async findVariantById(id: string): Promise<ProductVariant | null> {
-        const tenantCondition = this.getTenantCondition(this.repository.metadata.tableName);
-        const where = this.addTenantWhere({ id }, tenantCondition?.parameters.clientId);
-        return this.repository.findOneBy(where || {});
     }
     
 
