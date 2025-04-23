@@ -25,7 +25,6 @@ import {
       }
     }
   
-    // Add other hooks like beforeUpdate if needed, e.g., to prevent clientId modification
     beforeUpdate(event: UpdateEvent<any>) {
         const clientId = this.cls.get('clientId');
 

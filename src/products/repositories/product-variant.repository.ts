@@ -71,9 +71,9 @@ export class ProductVariantRepository {
             const tenantCondition = this.getTenantCondition();
             const finalWhere = this.addTenantWhere(options?.where, tenantCondition?.parameters.clientId);
     
-            // Use the standard repository's find with the modified where clause
+           
             return this.repository.find({
-                 ...options, // Spread other options like relations, order, skip, take, select
+                 ...options, 
                  where: finalWhere,
             });
         }

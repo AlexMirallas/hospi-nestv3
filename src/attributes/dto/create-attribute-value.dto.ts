@@ -8,7 +8,7 @@ export class CreateAttributeValueDto {
 
     @IsNumber()
     @IsNotEmpty()
-    attributeId: number; // Reference to the parent Attribute (e.g., ID for 'Color')
+    attributeId: number; 
 
     @IsOptional()
     @IsHexColor() 

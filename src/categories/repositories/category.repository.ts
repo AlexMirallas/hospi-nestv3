@@ -122,7 +122,7 @@ export class CategoryRepository { // No longer extends BaseRepository
         return this.repository.findAndCount({ ...options, where: finalWhere });
     }
 
-    // --- Delegated Write Methods ---
+
 
     create(entityLike: DeepPartial<Category>): Category
     create(entityLikes: DeepPartial<Category>[]): Category[]
@@ -145,7 +145,7 @@ export class CategoryRepository { // No longer extends BaseRepository
     /**
      * Deletes entities by a given criteria.
      * WARNING: This method bypasses tenant filtering applied by findOne/find.
-     * It's generally safer to fetch entities using find/findOne (which apply tenant rules)
+     * It's safer to fetch entities using find/findOne (which apply tenant rules)
      * and then pass those instances to remove(). Use with extreme caution in multi-tenant apps.
      */
     async delete(criteria: FindOptionsWhere<Category> | string | string[], options?: any): Promise<DeleteResult> {

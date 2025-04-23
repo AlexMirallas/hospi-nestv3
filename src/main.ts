@@ -7,30 +7,27 @@ import { ConfigService } from '@nestjs/config';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS (configure appropriately for production)
   app.enableCors(
     {exposedHeaders: 'Content-Range',} // Expose Content-Range header for CORS
   );
 
-  // Global Pipes for Validation
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Strip properties not in DTO
-      forbidNonWhitelisted: false, // Throw error if non-whitelisted properties are present
-      transform: true, // Automatically transform payloads to DTO instances
+      whitelist: true,
+      forbidNonWhitelisted: false, 
+      transform: true, 
       transformOptions: {
-        enableImplicitConversion: true, // Allow basic type conversions
+        enableImplicitConversion: true, 
       },
     }),
   );
 
-  // Global Interceptor for Class Serializer (works with @Exclude(), @Expose())
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector))); // 
 
 
 
   const configService = app.get(ConfigService);
-  const port = configService.get<number>('PORT') || 3000; // Example PORT from .env
+  const port = configService.get<number>('PORT') || 3000; 
 
   await app.listen(port);
   console.log(`Application is running on: ${await app.getUrl()}`);

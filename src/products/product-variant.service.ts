@@ -301,21 +301,21 @@ export class ProductVariantService {
             throw new ForbiddenException(`You do not have permission to update this variant `);
           }
 
-          // 2. Update basic variant fields if provided
+      
           if (updateDto.sku !== undefined) variant.sku = updateDto.sku;
           if (updateDto.priceAdjustment !== undefined) variant.priceAdjustment = updateDto.priceAdjustment;
           if (updateDto.stockQuantity !== undefined) variant.stockQuantity = updateDto.stockQuantity;
           if (updateDto.isActive !== undefined) variant.isActive = updateDto.isActive;
 
 
-          // Save the basic variant fields first
+         
           await queryRunner.manager.save(ProductVariant, variant);
 
-          // 3. Handle attribute value updates if provided
+      
           if (updateDto.attributeValues && updateDto.attributeValues.length > 0) {
             console.log('>>> Validating attribute values:', updateDto.attributeValues);
 
-            // Get new attribute value IDs
+           
             const newAttributeValueIds = updateDto.attributeValues.map(av => av.attributeValueId);
             console.log('>>> New attribute value IDs:', newAttributeValueIds);
 
@@ -333,10 +333,10 @@ export class ProductVariantService {
                 throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
             }
 
-            // Create a map for efficient lookup
+            // create a map for efficient lookup
             const newValueMap = new Map(newAttributeValues.map(v => [v.id, v]));
 
-            // Validate relationships between attributes and values
+            // validate relationships between attributes and values
             for (const dtoValue of updateDto.attributeValues) {
                 const newValue = newValueMap.get(dtoValue.attributeValueId);
                 if (newValue?.attribute.id !== dtoValue.attributeId) {
@@ -344,7 +344,7 @@ export class ProductVariantService {
                 }
             }
 
-            // First, explicitly delete all old ProductAttributeValue links
+            // delete all old ProductAttributeValue links
             if (variant.attributeValues && variant.attributeValues.length > 0) {
                 const oldAttributeValueIds = variant.attributeValues.map(av => av.id);
                 if (oldAttributeValueIds.length > 0) {
@@ -352,7 +352,7 @@ export class ProductVariantService {
                 }
             }
 
-            // Now create completely new ProductAttributeValue entities (don't reuse IDs)
+            //  create completely new ProductAttributeValue entities (don't reuse IDs)
             const newLinks: ProductAttributeValue[] = [];
             for (const dtoValue of updateDto.attributeValues) {
                 const correspondingValue = newValueMap.get(dtoValue.attributeValueId);
@@ -362,7 +362,7 @@ export class ProductVariantService {
                     throw new InternalServerErrorException(`Failed to find validated AttributeValue ${dtoValue.attributeValueId}`);
                 }
 
-                // Create new instance without specifying existing IDs
+                // create new instance without specifying existing IDs
                 const newLink = queryRunner.manager.create(ProductAttributeValue, {
                   variant: { id: variant.id }, 
                   attributeValue: correspondingValue, 
@@ -372,16 +372,13 @@ export class ProductVariantService {
                 newLinks.push(newLink);
             }
 
-            // Save the new links if there are any
             if (newLinks.length > 0) {
                 await queryRunner.manager.save(ProductAttributeValue, newLinks);
             }
           }
 
-          // Commit the transaction
           await queryRunner.commitTransaction();
 
-          // Fetch and return the updated variant with all its relations
           const updatedVariant = await this.VariantRepo.findOne({
               where: { id: variantId },
               relations: {

@@ -15,7 +15,6 @@ export class AppController {
   }
 
 
-  // Check database connection
   @Get('health')
   async checkHealth() {
     try {
