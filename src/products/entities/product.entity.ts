@@ -2,6 +2,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
 import { Category } from '../../categories/entities/category.entity';
 import { ProductVariant } from './product-variant.entity'; 
 import { Client } from 'src/clients/entities/client.entity';
+import { ProductImage } from './image.entity';
 
 @Entity('products')
 @Unique(['clientId', 'sku'])
@@ -46,4 +47,8 @@ export class Product {
   cascade: true
   })
   variants: ProductVariant[];
+
+  @OneToMany(() => ProductImage, (image) => image.product, { cascade: true })
+  images: ProductImage[];
+
 }

@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { join } from 'path';
+import { ServeStaticModule } from '@nestjs/serve-static';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { ProductsModule } from './products/products.module';
+import { ProductsModule } from './products/modules/products.module';
 import { AttributesModule } from './attributes/attributes.module';
 import { CommonModule } from './common/common.module'; // Import CommonModule
 import { User } from './users/entities/user.entity';
@@ -43,12 +45,17 @@ import { Client } from './clients/entities/client.entity';
       }),
       inject: [ConfigService],
     }),
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads'
+      }),
     AuthModule,
     UsersModule,
     ProductsModule,
     AttributesModule,
     CommonModule,
     CategoriesModule,
+
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,24 +1,21 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException,ConflictException } from '@nestjs/common';
 import { InjectRepository, } from '@nestjs/typeorm';
 import { Repository, In, DataSource, QueryRunner } from 'typeorm';
-import { Product } from './entities/product.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductAttributeValue } from './entities/product-attribute-value.entity';
-import { CreateProductDto } from './dto/create/create-product.dto';
-import { UpdateProductDto } from './dto/update/update-product.dto';
-import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
-import { Category } from '../categories/entities/category.entity';
-import { AttributeValue } from '../attributes/entities/attribute-value.entity';
-import { Attribute } from '../attributes/entities/attribute.entity';
-import { CreateProductVariantDto } from './dto/create/create-product-variant.dto';
-import { UpdateProductVariantDto } from './dto/update/update-product-variant.dto';
-import { ProductRepository } from './repositories/product.repository';
-import { ProductVariantRepository } from './repositories/product-variant.repository';
-import { AttributeValueRepository } from '../attributes/repositories/attribute-value.repository';
-import { AttributeRepository } from '../attributes/repositories/attribute.repository';
-import { CategoryRepository } from '../categories/repositories/category.repository';
+import { Product } from '../entities/product.entity';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { ProductAttributeValue } from '../entities/product-attribute-value.entity';
+import { CreateProductDto } from '../dto/create/create-product.dto';
+import { UpdateProductDto } from '../dto/update/update-product.dto';
+import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe';
+import { Category } from '../../categories/entities/category.entity';
+import { AttributeValue } from '../../attributes/entities/attribute-value.entity';
+import { ProductRepository } from '../repositories/product.repository';
+import { ProductVariantRepository } from '../repositories/product-variant.repository';
+import { AttributeValueRepository } from '../../attributes/repositories/attribute-value.repository';
+import { AttributeRepository } from '../../attributes/repositories/attribute.repository';
+import { CategoryRepository } from '../../categories/repositories/category.repository';
 import { ClsService } from 'nestjs-cls';
-import { Role } from '../common/enums/role.enum';
+import { Role } from '../../common/enums/role.enum';
 
 
 @Injectable()

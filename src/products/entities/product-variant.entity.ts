@@ -14,6 +14,7 @@ import {
   import { Product } from './product.entity';
   import { ProductAttributeValue } from './product-attribute-value.entity';
   import { Client } from 'src/clients/entities/client.entity';
+  import { ProductImage } from './image.entity'; 
 
   
   @Entity('product_variants')
@@ -60,4 +61,7 @@ import {
   
     @UpdateDateColumn()
     updatedAt: Date;
+
+    @OneToMany(() => ProductImage, (image) => image.variant, { cascade: true })
+    images: ProductImage[];
   }

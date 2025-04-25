@@ -1,13 +1,13 @@
 import { Controller, Get, Query, Param, ParseUUIDPipe, NotFoundException,UseInterceptors,Body,Post, UseGuards, Put, Delete, BadRequestException, InternalServerErrorException, ClassSerializerInterceptor } from '@nestjs/common';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorators'; 
-import { CreateProductVariantDto } from './dto/create/create-product-variant.dto';
-import { UpdateProductVariantDto } from './dto/update/update-product-variant.dto'; 
-import { ProductVariantService } from '../products/product-variant.service';
-import { ProductVariant } from '../products/entities/product-variant.entity';
-import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe'; 
-import { SimpleRestContentRangeInterceptor, PaginatedResponse } from '../interceptors/global-interceptors'; 
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard'; 
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorators'; 
+import { CreateProductVariantDto } from '../dto/create/create-product-variant.dto';
+import { UpdateProductVariantDto } from '../dto/update/update-product-variant.dto'; 
+import { ProductVariantService } from '../services/product-variant.service';
+import { ProductVariant } from '../entities/product-variant.entity';
+import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe'; 
+import { SimpleRestContentRangeInterceptor, PaginatedResponse } from '../../interceptors/global-interceptors'; 
 import { Role } from 'src/common/enums/role.enum';
 import { ParseSimpleRestParamsPipe } from 'src/common/pipes/parse-simple-rest.pipe';
 

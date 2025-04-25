@@ -1,16 +1,16 @@
 import { Injectable, NotFoundException,InternalServerErrorException,ForbiddenException, BadRequestException, ConflictException } from "@nestjs/common";
-import { ProductVariant } from "./entities/product-variant.entity";
-import { ProductVariantRepository } from "./repositories/product-variant.repository";
-import { ProductRepository } from "./repositories/product.repository";
-import { Product } from "./entities/product.entity";
-import { AttributeValue } from "../attributes/entities/attribute-value.entity"
-import { ProductAttributeValue } from "./entities/product-attribute-value.entity";
-import { CreateProductVariantDto } from "./dto/create/create-product-variant.dto";
-import { UpdateProductVariantDto } from "./dto/update/update-product-variant.dto";
-import { SimpleRestParams } from "../common/pipes/parse-simple-rest.pipe";
+import { ProductVariant } from "../entities/product-variant.entity";
+import { ProductVariantRepository } from "../repositories/product-variant.repository";
+import { ProductRepository } from "../repositories/product.repository";
+import { Product } from "../entities/product.entity";
+import { AttributeValue } from "../../attributes/entities/attribute-value.entity"
+import { ProductAttributeValue } from "../entities/product-attribute-value.entity";
+import { CreateProductVariantDto } from "../dto/create/create-product-variant.dto";
+import { UpdateProductVariantDto } from "../dto/update/update-product-variant.dto";
+import { SimpleRestParams } from "../../common/pipes/parse-simple-rest.pipe";
 import { ClsService } from "nestjs-cls";
 import { DataSource,In } from "typeorm";
-import { Role } from "../common/enums/role.enum";
+import { Role } from "../../common/enums/role.enum";
 
 
 
