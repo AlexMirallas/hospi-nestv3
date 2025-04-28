@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
     Repository,
@@ -205,12 +205,16 @@ export class ImageRepository {
     async save<T extends DeepPartial<ProductImage>>(entities: T[], options?: SaveOptions): Promise<T[]>
     async save<T extends DeepPartial<ProductImage>>(entityOrEntities: T | T[], options?: SaveOptions): Promise<T | T[]> {
         // Add pre-save tenant check if needed:
-        // const { cls_clientId } = this.getTenantCondition()?.parameters || {};
-        // const isSuperAdmin = !cls_clientId; // Simplified check based on getTenantCondition logic
-        // const checkEntity = (e: T) => {
-        //    if (!isSuperAdmin && e.clientId !== cls_clientId) throw new ForbiddenException(...);
-        // }
-        // Array.isArray(entityOrEntities) ? entityOrEntities.forEach(checkEntity) : checkEntity(entityOrEntities);
+        const { cls_clientId } = this.getTenantCondition()?.parameters || {};
+        const isSuperAdmin = !cls_clientId; // Simplified check based on getTenantCondition logic
+        const checkEntity = (e: T) => {
+            // Check if the entity has a clientId property before accessing it
+            if ('clientId' in e && !isSuperAdmin && e.clientId !== cls_clientId) {
+                this.logger.warn(`Attempt to save entity with mismatched clientId. Expected ${cls_clientId}, got ${e.clientId}`);
+                throw new ForbiddenException(`Cannot save entity belonging to another client.`);
+            }
+         }
+         Array.isArray(entityOrEntities) ? entityOrEntities.forEach(checkEntity) : checkEntity(entityOrEntities);
 
         return this.repository.save(entityOrEntities as any, options);
     }

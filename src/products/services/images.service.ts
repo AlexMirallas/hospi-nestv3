@@ -9,9 +9,9 @@ import {
   import { Repository, FindOptionsOrder, FindOptionsWhere } from 'typeorm';
   import { ProductImage } from '../entities/image.entity';
   import { ClsService } from 'nestjs-cls';
-  import { Role } from '../../common/enums/role.enum';
   import * as fs from 'fs';
   import { join } from 'path';
+  import { UpdateImageDetailsDto } from '../dto/update/update-image-details.dto';
   
   import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe'
   
@@ -43,12 +43,10 @@ import {
           where.clientId = filters.clientId as string;
       }
       if (filters.productId) {
-  where.productId = filters.productId as string;
-        console.log(`Applying filter: productId=${filters.productId}`);
+        where.productId = filters.productId as string;
       }
       if (filters.variantId) {
         where.variantId = filters.variantId as string;
-        console.log(`Applying filter: variantId=${filters.variantId}`);
       }
   
       // Define Sorting
@@ -81,8 +79,10 @@ import {
       file: Express.Multer.File,
       altText: string | undefined,
       isPrimary: boolean,
+      displayOrder: number,
       productId?: string,
       variantId?: string,
+      clientId?: string,
     ): Promise<ProductImage> {
   
       if ((!productId && !variantId) || (productId && variantId)) {
@@ -105,10 +105,14 @@ import {
         originalFilename: file.originalname,
         mimetype: file.mimetype,
         altText,
+        clientId: clientId ?? this.cls.get('clientId'), 
         isPrimary,
+        displayOrder: displayOrder ?? 0,
         productId,
         variantId,
       };
+
+      console.log('Creating image record:', imageData);
   
       // If setting as primary, unset other primary images for the same product/variant
       if (isPrimary) {
@@ -157,27 +161,89 @@ import {
       }
     }
   
-    private async unsetOtherPrimaryImages(
-      productId?: string,
-      variantId?: string,
-    ): Promise<void> {
-      // Where clause doesn't need clientId manually added
-      const whereCondition: FindOptionsWhere<ProductImage> = { isPrimary: true };
-      if (productId) {
-        whereCondition.productId = productId;
-      } else if (variantId) {
-        whereCondition.variantId = variantId;
-      } else {
-        return;
-      }
-  
+    
+
+    async findOneImage(imageId: string): Promise<ProductImage> {
       try {
-          // Use the repository's update method
-          const result = await this.imageRepository.update(whereCondition, { isPrimary: false });
+        // Use tenant-aware findOneByOrFail
+        const image = await this.imageRepository.findOneByOrFail({ id: imageId });
+        return image;
       } catch (error) {
-           if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
-               throw error;
-           }
+        if (error instanceof NotFoundException) {
+          throw error;
+        }
+        if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+          throw error; // Re-throw specific errors from repository/context
+        }
+        // Generic error if something else went wrong
+        throw new InternalServerErrorException(`Failed to retrieve image ${imageId}.`);
       }
     }
+
+    async updateImageDetails(
+      imageId: string,
+      updateDto: UpdateImageDetailsDto,
+    ): Promise<ProductImage> {
+      console.log(`Updating image details for ID: ${imageId} with data: ${JSON.stringify(updateDto)}`);
+  
+      // Fetch the image using tenant-aware method to ensure ownership/existence
+      const image = await this.findOneImage(imageId); // Reuse findOneImage for consistency
+  
+      // Check if setting as primary
+      if (updateDto.isPrimary === true && !image.isPrimary) {
+        console.log(`Setting image ${imageId} as primary. Unsetting others for product=${image.productId}, variant=${image.variantId}`);
+        // Ensure productId/variantId are available on the fetched image entity
+        if (!image.productId && !image.variantId) {
+          console.error(`Image ${imageId} is missing product/variant association, cannot unset primary.`);
+          // Handle this case appropriately - maybe throw an error or just log
+        } else {
+           await this.unsetOtherPrimaryImages(image.productId, image.variantId);
+        }
+      }
+      if (updateDto.altText !== undefined) {
+        image.altText = updateDto.altText;
+    }
+    if (updateDto.displayOrder !== undefined) {
+        image.displayOrder = updateDto.displayOrder;
+    }
+     if (updateDto.isPrimary !== undefined) {
+        image.isPrimary = updateDto.isPrimary;
+    }
+    try {
+      // Save the updated entity using tenant-aware save
+      const updatedImage = await this.imageRepository.save(image);
+      console.log(`Successfully updated image ${imageId}`);
+      return updatedImage;
+    } catch (error) {
+      console.error(`Failed to save updated image details for ${imageId}: ${error.message}`, error.stack);
+       if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+        throw error; // Re-throw specific errors from repository/context
+      }
+      throw new InternalServerErrorException(`Failed to update image details for ${imageId}.`);
+    }
   }
+
+  private async unsetOtherPrimaryImages(
+    productId?: string,
+    variantId?: string,
+  ): Promise<void> {
+    // Where clause doesn't need clientId manually added
+    const whereCondition: FindOptionsWhere<ProductImage> = { isPrimary: true };
+    if (productId) {
+      whereCondition.productId = productId;
+    } else if (variantId) {
+      whereCondition.variantId = variantId;
+    } else {
+      return;
+    }
+
+    try {
+        // Use the repository's update method
+        const result = await this.imageRepository.update(whereCondition, { isPrimary: false });
+    } catch (error) {
+         if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+             throw error;
+         }
+    }
+  }
+}

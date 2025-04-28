@@ -13,19 +13,22 @@ import {
     BadRequestException,
     Query,
     ParseBoolPipe,
-    Optional,
+    Put,
+    ValidationPipe,
     Get,
     Res,
     DefaultValuePipe,
+    ParseIntPipe,
   } from '@nestjs/common';
   import { FileInterceptor } from '@nestjs/platform-express';
   import { Express } from 'express';
   import { ImagesService } from '../services/images.service';
   import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
   import { RolesGuard } from '../../common/guards/roles.guard';
-  import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe'; // Adjust path as needed
+  import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe'; 
   import { Roles } from '../../common/decorators/roles.decorators';
   import { Role } from '../../common/enums/role.enum';
+  import { UpdateImageDetailsDto } from '../dto/update/update-image-details.dto'; 
   
   @Controller('images') // Base path for image operations
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -75,26 +78,35 @@ import {
     return data; // react-admin expects the array of data directly in the response body
   }
 
+  @Get(':imageId')
+  async findOne(@Param('imageId', ParseUUIDPipe) imageId: string) {
+    return this.imagesService.findOneImage(imageId);
+  }
+
     // Endpoint to upload an image for a specific PRODUCT
-    @Post()
-    @UseInterceptors(FileInterceptor('image')) // 'image' is the field name in the form-data
-    async uploadProductImage(
-      @Param('productId', ParseUUIDPipe) productId: string,
-      @UploadedFile() file: Express.Multer.File,
-      @Body('altText') altText?: string,
-      @Body('isPrimary', new ParseBoolPipe({ optional: true })) isPrimary: boolean = false,
-    ) {
-      if (!file) {
-        throw new BadRequestException('Image file is required.');
-      }
-      return this.imagesService.createImageRecord(
-        file,
-        altText,
-        isPrimary,
-        productId,
-        undefined, // No variantId
-      );
+  @Post('product/:productId')
+  @UseInterceptors(FileInterceptor('image')) // 'image' is the field name in the form-data
+  async uploadProductImage(
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('altText') altText?: string,
+    @Body('isPrimary', new ParseBoolPipe({ optional: true })) isPrimary: boolean = false,
+    @Body('displayOrder', new DefaultValuePipe(0), ParseIntPipe) displayOrder: number = 0,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Image file is required.');
     }
+    console.log('Uploading image for product:', productId);
+    console.log('File:', file);
+    return this.imagesService.createImageRecord(
+      file,
+      altText,
+      isPrimary,
+      displayOrder,
+      productId,
+      undefined, 
+    );
+  }
   
     // Endpoint to upload an image for a specific VARIANT
     @Post('variant/:variantId')
@@ -104,6 +116,7 @@ import {
       @UploadedFile() file: Express.Multer.File,
       @Body('altText') altText?: string,
       @Body('isPrimary', new ParseBoolPipe({ optional: true })) isPrimary: boolean = false,
+      @Body('displayOrder', new DefaultValuePipe(0), ParseIntPipe) displayOrder: number = 0,
     ) {
       if (!file) {
         throw new BadRequestException('Image file is required.');
@@ -112,10 +125,23 @@ import {
         file,
         altText,
         isPrimary,
+        displayOrder,
         undefined, 
         variantId,
       );
     }
+
+    @Put(':imageId')
+    async updateDetails(
+    @Param('imageId', ParseUUIDPipe) imageId: string,
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateDto: UpdateImageDetailsDto,
+  ) {
+    // Check if the DTO is empty, which might indicate an issue or no-op
+    if (Object.keys(updateDto).length === 0) {
+        throw new BadRequestException('No update data provided.');
+    }
+    return this.imagesService.updateImageDetails(imageId, updateDto);
+  }
   
     
     @Delete(':imageId')

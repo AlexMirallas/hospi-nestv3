@@ -90,6 +90,7 @@ export class ProductsController {
 
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    console.log("Fetching product with ID:", id);
     return this.productsService.findOne(id);
   }
 

@@ -107,7 +107,6 @@ export class ProductVariantService {
                     const filterValue = filters[key];
 
                     if (key === 'productId') {
-                        console.log(`>>> Applying productId filter with value: ${filterValue}`);
                         queryBuilder.andWhere('product.id = :productId', { productId: filterValue });
                         whereParams.productId = filterValue; 
                     }

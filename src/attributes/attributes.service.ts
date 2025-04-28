@@ -253,7 +253,6 @@ export class AttributeValuesService {
 
          if (key ==="clientId"){
           const idValue = Array.isArray(filterValue) ? filterValue[0] : filterValue;
-          console.log("Client ID filter value:", idValue);
           if (typeof idValue === 'string') {
             whereOptions.clientId = idValue; 
           }
