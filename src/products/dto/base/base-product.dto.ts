@@ -6,7 +6,8 @@ import {
     IsArray,
     IsUUID,
     MaxLength,
-    Min
+    Min,
+    IsInt,
   } from 'class-validator';
   
   export class ProductDto {
@@ -31,6 +32,15 @@ import {
   
     @IsBoolean()
     isActive: boolean;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    initialStock?: number;
+    
+    @IsOptional()
+    @IsBoolean()
+    trackInventory?: boolean = true;
   
     @IsOptional()
     @IsArray()

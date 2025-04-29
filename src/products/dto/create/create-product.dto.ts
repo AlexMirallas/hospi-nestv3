@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, MaxLength, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, IsUUID, Min } from 'class-validator';
+import { IsNotEmpty, IsString, MaxLength, IsOptional, IsNumber, IsBoolean, IsArray, ValidateNested, IsUUID, Min, IsInt } from 'class-validator';
 import { Type } from 'class-transformer';
 import { CreateProductVariantDto } from './create-product-variant.dto';
 
@@ -24,6 +24,15 @@ export class CreateProductDto {
     @IsOptional()
     @IsBoolean()
     isActive?: boolean = true;
+
+    @IsOptional()
+    @IsInt()
+    @Min(0)
+    initialStock?: number;
+
+    @IsOptional()
+    @IsBoolean()
+    trackInventory?: boolean = true;
 
 
     @IsOptional()

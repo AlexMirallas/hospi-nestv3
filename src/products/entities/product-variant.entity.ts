@@ -38,7 +38,7 @@ import {
     priceAdjustment: number;
   
     @Column({ type: 'int', default: 0 })
-    stockQuantity: number;
+    initialStock: number;
   
     @Column({ type: 'boolean', default: true })
     isActive: boolean;

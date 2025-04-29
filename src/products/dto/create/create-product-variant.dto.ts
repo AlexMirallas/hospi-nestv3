@@ -10,6 +10,7 @@ import {
     Min,
     ArrayNotEmpty,
     IsUUID,
+    IsInt,
   } from 'class-validator';
   import { Type } from 'class-transformer';
   import { AttributeValueRefDto } from '../base/attribute-value-reference.dto';
@@ -25,10 +26,10 @@ import {
     @Min(0)
     priceAdjustment?: number = 0;
   
-    @IsNumber()
     @IsOptional()
+    @IsInt()
     @Min(0)
-    stockQuantity?: number = 0;
+    initialStock?: number;
   
     @IsBoolean()
     @IsOptional()

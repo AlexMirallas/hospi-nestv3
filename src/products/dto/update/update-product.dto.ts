@@ -23,6 +23,10 @@ export class UpdateProductDto {
     @IsOptional()
     @IsBoolean()
     isActive?: boolean;
+
+    @IsOptional()
+    @IsBoolean()
+    trackInventory?: boolean;
   
     @IsOptional()
     @IsArray()

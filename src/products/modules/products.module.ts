@@ -16,13 +16,15 @@ import { AttributeValueRepository } from 'src/attributes/repositories/attribute-
 import { CategoryRepository } from 'src/categories/repositories/category.repository';
 import { ProductVariantService } from '../services/product-variant.service';
 import { ImagesModule } from './images.module';
+import { StockModule } from 'src/stock/stock.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([ProductAttributeValue,Product, ProductVariant]),
     AttributesModule, 
     CategoriesModule,
-    ImagesModule, 
+    ImagesModule,
+    StockModule, 
   ],
   controllers: [ProductsController,VariantsController],
   providers: [ProductsService,ProductVariantService, SimpleRestContentRangeInterceptor,ProductRepository,ProductVariantRepository, AttributeRepository, AttributeValueRepository, CategoryRepository],

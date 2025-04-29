@@ -5,9 +5,9 @@ import {
     IsBoolean,
     IsArray,
     IsUUID,
-    IsNotEmpty,
     MaxLength,
-    Min
+    Min,
+    IsInt,
   } from 'class-validator';
   
   export class ProductVariantDto {
@@ -26,9 +26,12 @@ import {
     @Min(0)
     priceAdjustment?: number;
   
-    @IsNumber()
+    @IsOptional()
+    @IsInt()
     @Min(0)
-    stockQuantity: number;
+    initialStock?: number;
+    
+
   
     @IsBoolean()
     isActive: boolean;

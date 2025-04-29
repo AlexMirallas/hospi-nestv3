@@ -7,7 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/modules/products.module';
 import { AttributesModule } from './attributes/attributes.module';
-import { CommonModule } from './common/common.module'; // Import CommonModule
+import { CommonModule } from './common/common.module'; 
 import { User } from './users/entities/user.entity';
 import { Product } from './products/entities/product.entity';
 import { Category } from './categories/entities/category.entity';
@@ -19,6 +19,9 @@ import { AppService } from './app.service';
 import { ProductVariant } from './products/entities/product-variant.entity';
 import { ClsModule } from 'nestjs-cls'; 
 import { Client } from './clients/entities/client.entity';
+import { StockModule } from './stock/stock.module';
+import { StockMovement } from './stock/entities/stock-movement.entity';
+import { StockLevel } from './stock/entities/stock-level.entity';
 
 @Module({
   imports: [
@@ -39,7 +42,7 @@ import { Client } from './clients/entities/client.entity';
         username: configService.get<string>('DATABASE_USERNAME'),
         password: configService.get<string>('DATABASE_PASSWORD'),
         database: configService.get<string>('DATABASE_NAME'),
-        entities: [User, Product, Attribute, AttributeValue, Category, ProductVariant, Client], 
+        entities: [User, Product, Attribute, AttributeValue, Category, ProductVariant, Client,StockLevel, StockMovement], 
         synchronize: true, 
         autoLoadEntities: true,
       }),
@@ -55,7 +58,7 @@ import { Client } from './clients/entities/client.entity';
     AttributesModule,
     CommonModule,
     CategoriesModule,
-
+    StockModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -9,8 +9,10 @@ import { CreateProductVariantDto } from "../dto/create/create-product-variant.dt
 import { UpdateProductVariantDto } from "../dto/update/update-product-variant.dto";
 import { SimpleRestParams } from "../../common/pipes/parse-simple-rest.pipe";
 import { ClsService } from "nestjs-cls";
-import { DataSource,In } from "typeorm";
+import { DataSource,In, QueryRunner } from "typeorm";
 import { Role } from "../../common/enums/role.enum";
+import { StockService } from "src/stock/stock.service";
+import { StockMovementType } from "src/common/enums/stock-movement.enum";
 
 
 
@@ -19,12 +21,13 @@ export class ProductVariantService {
     constructor(
         private readonly VariantRepo: ProductVariantRepository,
         private readonly ProductRepo: ProductRepository,
+        private readonly stockService: StockService,
         private readonly cls: ClsService,
         private readonly dataSource: DataSource,
       ) {}
 
 
-      async findOne(id: string): Promise<ProductVariant> {
+      async findOne(id: string): Promise<ProductVariant | null> {
         const variant = await this.VariantRepo.findOne({
            where: { id },
            relations: {
@@ -35,23 +38,17 @@ export class ProductVariantService {
             },
           },
       });
-        if (!variant) {
-          throw new NotFoundException(`Product variant with ID ${id} not found`);
-        }
-        return variant;
-      }
+      let currentStock: number | null = null;
+    try {
+      currentStock = await this.stockService.getCurrentStock(id, 'variant');
+    } catch (stockError) {
+      console.warn(`Could not fetch stock for variant ${id}: ${stockError.message}`);
+    }
+    (variant as any).currentStock = currentStock;
+    return variant;
+  }
     
-      
     
-
-      /**
-       * Update stock quantity for a variant
-       */
-      async updateVariantStock(id: string, quantity: number): Promise<ProductVariant> {
-        const variant = await this.findOne(id);
-        variant.stockQuantity = quantity;
-        return this.VariantRepo.save(variant);
-      }
 
       /**
        * Find all variants for a given product ID
@@ -80,9 +77,21 @@ export class ProductVariantService {
             sku: 'ASC', 
           },
         });
-        return variants;
+        const variantIds = variants.map(v => v.id);
+    let stockMap = new Map<string, number>();
+    if (variantIds.length > 0) {
+      try {
+        stockMap = await this.stockService.getCurrentStockForMultipleItems(variantIds, 'variant');
+      } catch (stockError) {
+        console.warn(`Could not fetch batch stock for variants of product ${productId}: ${stockError.message}`);
       }
+    }
+    variants.forEach(variant => {
+      (variant as any).currentStock = stockMap.get(variant.id) ?? 0;
+    });
 
+    return variants;
+  }
 
       async findPaginatedVariants(
         params: SimpleRestParams,
@@ -123,9 +132,6 @@ export class ProductVariantService {
                          queryBuilder.andWhere('variant.id IN (:...variantIds)', { variantIds: filterValue });
                     }
 
-                    else if (key === "stockQuantity") {
-                        queryBuilder.andWhere('variant.stockQuantity < :stockQuantity', { stockQuantity: filterValue });
-                    }
                     else if (key === "name") {
                         queryBuilder.andWhere('product.name ILIKE :name', { name: `%${filterValue}%` });
                     }
@@ -148,6 +154,18 @@ export class ProductVariantService {
      
         const [data, total] = await queryBuilder.getManyAndCount();
 
+        const variantIds = data.map(v => v.id);
+        let stockMap = new Map<string, number>();
+        if (variantIds.length > 0) {
+          try {
+            stockMap = await this.stockService.getCurrentStockForMultipleItems(variantIds, 'variant');
+          } catch (stockError) {
+            console.warn(`Could not fetch batch stock for paginated variants: ${stockError.message}`);
+          }
+        }
+        data.forEach(variant => {
+          (variant as any).currentStock = stockMap.get(variant.id) ?? 0;
+        });
         return { data, total };
       }
 
@@ -163,7 +181,7 @@ export class ProductVariantService {
 
         const queryRunner = this.dataSource.createQueryRunner();
         await queryRunner.connect();
-        await queryRunner.startTransaction();
+        await queryRunner.startTransaction('SERIALIZABLE');
 
         try {
           const product = await queryRunner.manager.findOne(Product, {
@@ -206,13 +224,31 @@ export class ProductVariantService {
           const newVariant = queryRunner.manager.create(ProductVariant, {
             sku: createVariantDto.sku,
             priceAdjustment: createVariantDto.priceAdjustment ?? 0,
-            stockQuantity: createVariantDto.stockQuantity ?? 0,
             isActive: createVariantDto.isActive ?? true,
             product: { id: product.id },
             clientId: finalClientId,
           });
 
-          await queryRunner.manager.save(ProductVariant, newVariant);
+          const savedVariant = await queryRunner.manager.save(ProductVariant, newVariant);
+          const initialStockValue = createVariantDto.initialStock; // Get from DTO
+      if (typeof initialStockValue === 'number' && initialStockValue >= 0) {
+        console.log(`Recording initial stock (${initialStockValue}) for variant ${savedVariant.id}`);
+        await this.stockService.recordMovement({
+          variantId: savedVariant.id,
+          quantityChange: initialStockValue,
+          movementType: StockMovementType.INITIAL,
+          clientId: finalClientId,
+        });
+        console.log(`Initial stock recorded for variant ${savedVariant.id}`);
+      } else {
+        console.log(`No valid initial stock provided for variant ${savedVariant.id}. Recording 0 movement.`);
+        await this.stockService.recordMovement({
+          variantId: savedVariant.id,
+          quantityChange: 0,
+          movementType: StockMovementType.INITIAL,
+          clientId: finalClientId,
+        });
+      }
 
 
           const productAttributeValueEntities = attributeValues.map(attrValue => {
@@ -303,7 +339,6 @@ export class ProductVariantService {
       
           if (updateDto.sku !== undefined) variant.sku = updateDto.sku;
           if (updateDto.priceAdjustment !== undefined) variant.priceAdjustment = updateDto.priceAdjustment;
-          if (updateDto.stockQuantity !== undefined) variant.stockQuantity = updateDto.stockQuantity;
           if (updateDto.isActive !== undefined) variant.isActive = updateDto.isActive;
 
 
@@ -331,11 +366,9 @@ export class ProductVariantService {
                 const missingIds = newAttributeValueIds.filter(id => !foundIds.includes(id));
                 throw new BadRequestException(`Attribute values not found: ${missingIds.join(', ')}`);
             }
-
-            // create a map for efficient lookup
+            
             const newValueMap = new Map(newAttributeValues.map(v => [v.id, v]));
 
-            // validate relationships between attributes and values
             for (const dtoValue of updateDto.attributeValues) {
                 const newValue = newValueMap.get(dtoValue.attributeValueId);
                 if (newValue?.attribute.id !== dtoValue.attributeId) {
@@ -351,7 +384,7 @@ export class ProductVariantService {
                 }
             }
 
-            //  create completely new ProductAttributeValue entities (don't reuse IDs)
+            //  create completely new ProductAttributeValue entities
             const newLinks: ProductAttributeValue[] = [];
             for (const dtoValue of updateDto.attributeValues) {
                 const correspondingValue = newValueMap.get(dtoValue.attributeValueId);

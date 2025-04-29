@@ -16,24 +16,23 @@ import { AttributeRepository } from '../../attributes/repositories/attribute.rep
 import { CategoryRepository } from '../../categories/repositories/category.repository';
 import { ClsService } from 'nestjs-cls';
 import { Role } from '../../common/enums/role.enum';
+import { StockService } from 'src/stock/stock.service';
+import { StockMovementType } from '../../common/enums/stock-movement.enum';
 
 
 @Injectable()
 export class ProductsService {
   constructor(
-
     private ProductRepo: ProductRepository,
-    
     private VariantRepo: ProductVariantRepository,
-    
     @InjectRepository(ProductAttributeValue)
     private attributeValueRepo: Repository<ProductAttributeValue>,
-
     private attributeValueBaseRepo: AttributeValueRepository,
     private attributeRepo: AttributeRepository,
     private categoryRepository:  CategoryRepository,
     private dataSource: DataSource,
     private readonly cls: ClsService,
+    private readonly stockService: StockService
   ) {}
 
   /**
@@ -53,7 +52,7 @@ export class ProductsService {
     if (isSuperAdmin) {
         console.log(`SuperAdmin creating product for client ${finalClientId}`);
     } else if (currentUserRoles.includes(Role.Admin)) {
-finalClientId = currentUserClientId;
+        finalClientId = currentUserClientId;
         console.log(`Admin creating product. Overriding clientId to Admin's client: ${finalClientId}`);
     } else {
         throw new ForbiddenException('You do not have permission to create products.');
@@ -61,60 +60,74 @@ finalClientId = currentUserClientId;
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
-    await queryRunner.startTransaction();
+    await queryRunner.startTransaction('SERIALIZABLE');
 
     console.log('>>> Received createProductDto:', createProductDto);
     console.log(`>>> Determined final Client ID: ${finalClientId}`);
 
     try {
-      // 1. Create the product entity using queryRunner.manager
-      // queryRunner.manager.create returns a single entity instance (Product)
-      const product = queryRunner.manager.create(Product, { // Use queryRunner.manager.create
+    
+      const product = queryRunner.manager.create(Product, { 
         sku: createProductDto.sku,
         name: createProductDto.name,
         description: createProductDto.description,
         basePrice: createProductDto.basePrice,
         isActive: createProductDto.isActive ?? true,
-        clientId: finalClientId, // Use the determined finalClientId
+        clientId: finalClientId,
+        trackInventory: createProductDto.trackInventory ?? true,
+        initialStock: createProductDto.initialStock ?? 0, 
       });
 
-      // 2. Handle categories using queryRunner.manager
+      
       if (createProductDto.categoryIds && createProductDto.categoryIds.length > 0) {
-        // Fetch categories using the transaction manager to ensure consistency
-        // Note: categoryRepository.findBy might apply tenant filtering based on CLS,
-        // using queryRunner.manager.findBy bypasses that unless manually added.
-        // Ensure categories belong to the finalClientId if Category is tenant-specific.
-        const categories = await queryRunner.manager.findBy(Category, { // Use queryRunner.manager.findBy
+        const categories = await queryRunner.manager.findBy(Category, { 
           id: In(createProductDto.categoryIds),
           clientId: finalClientId
         });
 
         if (categories.length !== createProductDto.categoryIds.length) {
-           // Find which IDs were not found
            const foundIds = categories.map(c => c.id);
            const missingIds = createProductDto.categoryIds.filter(id => !foundIds.includes(parseInt(id)));
            console.error(`Categories not found or inaccessible for client ${finalClientId}: ${missingIds.join(', ')}`);
            throw new BadRequestException(`One or more categories not found or not accessible: ${missingIds.join(', ')}`);
         }
 
-        // Assign categories - 'product' is correctly typed as Product here
         product.categories = categories;
 
-      // 3. Save the product using queryRunner.manager
-      // queryRunner.manager.save returns the saved entity (Product)
-      await queryRunner.manager.save(Product, product); // Use queryRunner.manager.save
+    
+      const savedProduct = await queryRunner.manager.save(Product, product); 
+      
+      const shouldTrackProductStock = savedProduct.trackInventory;
+      const hasVariantsInDto = createProductDto.variants && createProductDto.variants.length > 0;
+      const initialStockValue = createProductDto.initialStock;
 
-      // 4. Create variants if provided (pass queryRunner)
+      if (shouldTrackProductStock && !hasVariantsInDto && typeof initialStockValue === 'number' && initialStockValue >= 0) {
+        console.log(`Recording initial stock (${initialStockValue}) for product ${savedProduct.id}`);
+        await this.stockService.recordMovement({
+          productId: savedProduct.id,
+          quantityChange: initialStockValue,
+          movementType: StockMovementType.INITIAL,
+          clientId: finalClientId,  
+        }, queryRunner);  
+      } else if (shouldTrackProductStock && !hasVariantsInDto && initialStockValue === undefined) {
+          console.log(`Product ${savedProduct.id} tracking inventory but no initial stock provided. Starting at 0.`);
+          await this.stockService.recordMovement({
+              productId: savedProduct.id,
+              quantityChange: 0, 
+              movementType: StockMovementType.INITIAL,
+              clientId: finalClientId,
+          }, queryRunner);
+      } else if (!shouldTrackProductStock) {
+         console.log(`Inventory tracking disabled for product ${savedProduct.id}. Skipping initial stock.`);
+      } else if (hasVariantsInDto) {
+        console.log(`Product ${savedProduct.id} has variants in DTO. Initial stock will be handled at variant level.`);
+      }
+      
       if (createProductDto.variants && createProductDto.variants.length > 0) {
-        // Ensure createVariantsForProduct uses queryRunner.manager internally
         await this.createVariantsForProduct(product, createProductDto.variants, queryRunner); // Pass queryRunner
       }
 
-      // Commit transaction
       await queryRunner.commitTransaction();
-
-      // Return the product using the standard findOne (which uses the custom repository filtering)
-      // Fetch outside the transaction to get the final state with relations
       return this.findOne(product.id);
     }
 
@@ -138,10 +151,10 @@ finalClientId = currentUserClientId;
    */
   private async createVariantsForProduct(product: Product, variantDtos: any[], queryRunner: QueryRunner): Promise<void> {
 
-    // 1. Aggregate all required AttributeValue IDs from all variant DTOs
+    
     const allAttributeValueIds = variantDtos.flatMap(
         variantDto => variantDto.attributeValues?.map((av: { attributeValueId: string }) => av.attributeValueId) ?? []
-    ).filter(id => id); // Filter out any potential null/undefined IDs
+    ).filter(id => id); 
 
     if (allAttributeValueIds.length === 0 && variantDtos.some(dto => dto.attributeValues?.length > 0)) {
         throw new BadRequestException('Attribute value IDs are missing in variant DTOs.');
@@ -149,13 +162,13 @@ finalClientId = currentUserClientId;
 
     let attributeValueMap = new Map<string, AttributeValue>();
 
-    // 2. Fetch all required AttributeValue entities if any IDs were provided
+   
     if (allAttributeValueIds.length > 0) {
         const uniqueAttributeValueIds = [...new Set(allAttributeValueIds)]; // Ensure uniqueness
 
         let idsForQuery: (string | number)[];
         try {
-             // Assuming AttributeValue.id is number, convert for DB query
+            
              idsForQuery = uniqueAttributeValueIds.map(idStr => {
                  const num = parseInt(idStr, 10);
                  if (isNaN(num)) throw new Error(`Invalid attribute value ID format: ${idStr}`);
@@ -165,19 +178,18 @@ finalClientId = currentUserClientId;
              throw new BadRequestException(e.message || 'Invalid attribute value ID format.');
         }
 
-        // Fetch using the transaction's entity manager
+       
         const fetchedAttributeValues = await queryRunner.manager.find(AttributeValue, {
             where: {
                 id: In(uniqueAttributeValueIds),
                 clientId: product.clientId
             },
-            relations: { attribute: true } // Ensure the parent attribute is loaded
+            relations: { attribute: true } 
         });
 
-        // Validate that all requested attribute values were found
+       
         if (fetchedAttributeValues.length !== uniqueAttributeValueIds.length) {
-            const foundDbIds = fetchedAttributeValues.map(av => av.id); // These are numbers from DB
-            // Find which original STRING IDs were not found by converting found DB IDs back to string for comparison
+            const foundDbIds = fetchedAttributeValues.map(av => av.id); 
             const foundDbIdsAsStrings = foundDbIds.map(idNum => idNum.toString());
             const missingIds = uniqueAttributeValueIds.filter(idStr => !foundDbIdsAsStrings.includes(idStr));
             console.error(`Attribute values not found or inaccessible for client ${product.clientId}: ${missingIds.join(', ')}`);
@@ -189,45 +201,57 @@ finalClientId = currentUserClientId;
     }
 
 
-    // 3. Loop through each variant DTO to create the variant and its links
+   
     for (const variantDto of variantDtos) {
-        // Basic validation for the DTO structure
-        if (!variantDto.sku) { // Add other necessary checks
+        if (!variantDto.sku) { 
             throw new BadRequestException('Variant SKU is required.');
         }
 
     const variant = queryRunner.manager.create(ProductVariant, {
             sku: variantDto.sku,
             priceAdjustment: variantDto.priceAdjustment ?? 0,
-            stockQuantity: variantDto.stockQuantity ?? 0,
             isActive: variantDto.isActive ?? true,
-            clientId: product.clientId, // Assign the parent product's clientId
-            product: { id: product.id } // Link to the parent product by ID
+            clientId: product.clientId, 
+            product: { id: product.id } 
         });
 
-        // Save the ProductVariant using the transaction's entity manager
-        await queryRunner.manager.save(ProductVariant, variant);
+        const savedVariant = await queryRunner.manager.save(ProductVariant, variant);
+        const initialStockValue = variantDto.initialStock; // Get from DTO
+        if (typeof initialStockValue === 'number' && initialStockValue >= 0) {
+          console.log(`Recording initial stock (${initialStockValue}) for variant ${savedVariant.id}`);
+          // Call StockService within the transaction
+          await this.stockService.recordMovement({
+              variantId: savedVariant.id, 
+              quantityChange: initialStockValue,
+              movementType: StockMovementType.INITIAL,
+              clientId: product.clientId, 
+          });
+          console.log(`Initial stock recorded for variant ${savedVariant.id}`);
+      } else {
+           console.log(`No valid initial stock provided for variant ${savedVariant.id}. Stock level will start at 0 if accessed.`);
+           await this.stockService.recordMovement({
+               variantId: savedVariant.id,
+               quantityChange: 0,
+               movementType: StockMovementType.INITIAL,
+              clientId: product.clientId,
+           });
+      }
 
-        // Create ProductAttributeValue links if attribute values are provided for this variant
         const attributeValueEntities: ProductAttributeValue[] = [];
         if (variantDto.attributeValues && variantDto.attributeValues.length > 0) {
             const attributeIdsInVariant = new Set<string>();
 
             for (const dtoAttributeValue of variantDto.attributeValues) {
-                const attributeValueId = dtoAttributeValue.attributeValueId; // This is a STRING
+                const attributeValueId = dtoAttributeValue.attributeValueId; 
                 if (!attributeValueId) {
                     // ... error handling ...
                 }
-
-                // --- FIX 3: Lookup uses STRING key (attributeValueId) - Now matches map type ---
                 const currentAttributeValue = attributeValueMap.get(attributeValueId);
 
-                if (!currentAttributeValue) { // This check is now valid (line ~220)
-                    // This should not happen if the initial fetch and validation passed
+                if (!currentAttributeValue) { 
                     throw new InternalServerErrorException(`Could not find fetched attribute value for ID: ${attributeValueId}`);
                 }
                 const attributeIdAsString = currentAttributeValue.attribute.id.toString();
-                // ... rest of the loop ...
                  if (attributeIdsInVariant.has(attributeIdAsString)) {
                      throw new BadRequestException(`Variant SKU ${variantDto.sku} cannot have multiple values for the same attribute (Attribute ID: ${currentAttributeValue.attribute.id}).`);
                  }
@@ -235,14 +259,13 @@ finalClientId = currentUserClientId;
 
                 const productAttributeValue = queryRunner.manager.create(ProductAttributeValue, {
                      variant: { id: variant.id },
-                     attributeValue: { id: currentAttributeValue.id }, // Use numeric ID here if relation expects number
-                     attribute: { id: currentAttributeValue.attribute.id }, // Use numeric ID here if relation expects number
+                     attributeValue: { id: currentAttributeValue.id }, 
+                     attribute: { id: currentAttributeValue.attribute.id }, 
                      clientId: product.clientId,
                  });
                 attributeValueEntities.push(productAttributeValue);
             }
 
-            // Save all the linking entities for this variant using the transaction's entity manager
             if (attributeValueEntities.length > 0) {
                 await queryRunner.manager.save(ProductAttributeValue, attributeValueEntities);
             }
@@ -255,7 +278,7 @@ finalClientId = currentUserClientId;
   ): Promise<{ data: Product[]; total: number }> {
     const { start = 0, end = 9, sort, order = 'ASC', filters = {} } = params;
   
-    // Calculate TypeORM pagination options
+   
     const take = end - start + 1;
     const skip = start;
     
@@ -267,7 +290,7 @@ finalClientId = currentUserClientId;
       .leftJoinAndSelect('attrValue.attributeValue', 'attributeValue')
       .leftJoinAndSelect('attrValue.attribute', 'attribute');
     
-    // Add where clauses for filters
+    
     if (filters) {
       for (const key in filters) {
         if (
@@ -275,17 +298,17 @@ finalClientId = currentUserClientId;
           filters[key] !== undefined &&
           filters[key] !== null
         ) {
-          // Handle special case for categoryId
+         
           if (key === 'categoryId' && filters[key]) {
             queryBuilder.andWhere('category.id = :categoryId', { categoryId: filters[key] });
           }
-          // Handle attribute filter
+         
           else if (key === 'attributeValueId' && filters[key]) {
             queryBuilder.andWhere('attributeValue.id = :attributeValueId', { 
               attributeValueId: filters[key] 
             });
           }
-          // Handle regular fields
+          
           else if (this.ProductRepo.metadata.hasColumnWithPropertyPath(key)) {
             queryBuilder.andWhere(`product.${key} = :${key}`, { [key]: filters[key] });
           } else {
@@ -295,35 +318,53 @@ finalClientId = currentUserClientId;
       }
     }
 
-    // Add sorting
+   
     if (sort && this.ProductRepo.metadata.hasColumnWithPropertyPath(sort)) {
       queryBuilder.orderBy(`product.${sort}`, order.toUpperCase() as 'ASC' | 'DESC');
     } else {
-      // Default sort
       queryBuilder.orderBy('product.id', 'ASC');
     }
     
-    // Add pagination
     queryBuilder.skip(skip).take(take);
     
-    // Execute the query
     const [data, total] = await queryBuilder.getManyAndCount();
 
-    // Process the data to extract category IDs and variant info
+    const productIdsWithDirectStock = data
+      .filter(p => p.trackInventory && (!p.variants || p.variants.length === 0)) // Products to track directly
+      .map(p => p.id);
+      console.log(`>>> Product IDs passed to stock service: ${JSON.stringify(productIdsWithDirectStock)}`);
+    let stockMap = new Map<string, number>();
+    console.log(`Product IDs with direct stock tracking: ${productIdsWithDirectStock}`);
+    console.log(`Stock map before fetching: ${JSON.stringify(stockMap)}`);
+    if (productIdsWithDirectStock.length > 0) {
+      try {
+        stockMap = await this.stockService.getCurrentStockForMultipleItems(productIdsWithDirectStock, 'product');
+        console.log(`Stock map after fetching: ${JSON.stringify(stockMap)}`);
+      } catch (stockError) {
+        console.warn(`Could not fetch batch stock for products: ${stockError.message}`);
+      }
+    }
+
+   
     const processedData = data.map(product => {
       const productObj = { ...product };
       productObj['categoryIds'] = product.categories.map(category => category.id);
       
-      // Calculate min/max prices from variants
       if (product.variants && product.variants.length) {
         const variantPrices = product.variants.map(v => 
           product.basePrice + (v.priceAdjustment || 0)
         );
         productObj['minPrice'] = Math.min(...variantPrices);
         productObj['maxPrice'] = Math.max(...variantPrices);
+        productObj['currentStock'] = null;
       } else {
         productObj['minPrice'] = product.basePrice;
         productObj['maxPrice'] = product.basePrice;
+        if (product.trackInventory) {
+          productObj['currentStock'] = stockMap.get(product.id) ?? 0;
+        }else{
+          productObj['currentStock'] = null;
+        }
       }
       
       return productObj;
@@ -353,6 +394,18 @@ finalClientId = currentUserClientId;
     
     const categoryIds = product.categories.map(category => category.id);
     (product as any).categoryIds = categoryIds;
+
+    let currentStock: number | null = null;
+    // Fetch stock only if tracking is enabled AND there are no variants
+    if (product.trackInventory && (!product.variants || product.variants.length === 0)) {
+      try {
+        currentStock = await this.stockService.getCurrentStock(product.id, 'product');
+      } catch (error) {
+        console.warn(`Could not fetch stock for product ${id}: ${error.message}`);
+        // currentStock remains null
+      }
+    }
+    (product as any).currentStock = currentStock;
     
     return product;
   }
@@ -386,18 +439,23 @@ finalClientId = currentUserClientId;
         console.warn(`Admin ${currentUserClientId} attempting to update product ${product.id} owned by client ${product.clientId}.`);
         throw new ForbiddenException(`You do not have permission to update this product `);
     }
-      // Update basic product fields
-      console.log('>>> Updating product with ID:', id, 'with data:', updateProductDto);
-      queryRunner.manager.merge(Product, product, {
+      
+      const updatedFields: Partial<Product> = {
         name: updateProductDto.name,
         description: updateProductDto.description,
         basePrice: updateProductDto.basePrice,
         isActive: updateProductDto.isActive,
         sku: updateProductDto.sku,
-    })
+        trackInventory: updateProductDto.trackInventory,
+      };
+
+      Object.keys(updatedFields).forEach(key => updatedFields[key] === undefined && delete updatedFields[key]);
+
+      console.log('>>> Updating product with ID:', id, 'with data:', updateProductDto);
+      queryRunner.manager.merge(Product, product, updatedFields);
 
       // Update categories if provided
-      if (updateProductDto.categoryIds) {
+      if (updateProductDto.categoryIds !== undefined) {
         if (updateProductDto.categoryIds.length > 0) {
           const categories = await this.categoryRepository.findBy({
             id: In(updateProductDto.categoryIds)
@@ -424,7 +482,7 @@ finalClientId = currentUserClientId;
       if (error instanceof BadRequestException || error instanceof ForbiddenException || error instanceof NotFoundException) {
           throw error;
       }
-      if (error.code === '23505') { // Handle unique constraint errors (e.g., SKU)
+      if (error.code === '23505') { // Handle unique constraint errors (SKU)
           throw new ConflictException(`Product update failed: ${error.detail || 'Duplicate value detected.'}`);
       }
       throw new InternalServerErrorException(`Failed to update product: ${error.message}`);
