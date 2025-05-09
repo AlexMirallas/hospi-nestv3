@@ -57,10 +57,10 @@ export class StockService {
       queryRunner = this.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction('SERIALIZABLE');
-      manager = queryRunner.manager; // Use the queryRunner's manager
+      manager = queryRunner.manager; 
       this.logger.verbose('recordMovement started its own transaction.');
   } else {
-      manager = externalQueryRunner.manager; // Use the manager from the passed queryRunner
+      manager = externalQueryRunner.manager; 
       this.logger.verbose('recordMovement operating within an external transaction.');
   }
 
@@ -295,6 +295,6 @@ export class StockService {
     return stockMap;
   }
  
-  // async getStockHistory(itemId: string, itemType: 'product' | 'variant', options: FindManyOptions<StockMovement>): Promise<[StockMovement[], number]>
-  // async adjustStock(itemId: string, itemType: 'product' | 'variant', newQuantity: number, reason: string, userId?: string): Promise<StockMovement>
+  // async getStockHistory()
+  // async adjustStock()
 }

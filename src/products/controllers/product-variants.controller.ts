@@ -74,7 +74,7 @@ export class VariantsController {
     @Roles(Role.Admin, Role.SuperAdmin)
     async removeVariant(
         @Param('variantId', ParseUUIDPipe) variantId: string,
-    ): Promise<void> {
+    ): Promise<ProductVariant> {
         const variant = await this.productVariantService.findOne(variantId); 
         if (!variant) {
             throw new NotFoundException(`Variant with ID ${variantId} not found`);

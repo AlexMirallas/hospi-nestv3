@@ -230,7 +230,7 @@ export class ProductVariantService {
           });
 
           const savedVariant = await queryRunner.manager.save(ProductVariant, newVariant);
-          const initialStockValue = createVariantDto.initialStock; // Get from DTO
+          const initialStockValue = createVariantDto.initialStock; 
       if (typeof initialStockValue === 'number' && initialStockValue >= 0) {
         console.log(`Recording initial stock (${initialStockValue}) for variant ${savedVariant.id}`);
         await this.stockService.recordMovement({
@@ -238,7 +238,7 @@ export class ProductVariantService {
           quantityChange: initialStockValue,
           movementType: StockMovementType.INITIAL,
           clientId: finalClientId,
-        });
+        },queryRunner);
         console.log(`Initial stock recorded for variant ${savedVariant.id}`);
       } else {
         console.log(`No valid initial stock provided for variant ${savedVariant.id}. Recording 0 movement.`);
@@ -247,7 +247,7 @@ export class ProductVariantService {
           quantityChange: 0,
           movementType: StockMovementType.INITIAL,
           clientId: finalClientId,
-        });
+        },queryRunner);
       }
 
 
@@ -445,7 +445,7 @@ export class ProductVariantService {
       /**
        * Delete a product variant by ID
        */
-      async removeVariant(id: string): Promise<void> {
+      async removeVariant(id: string): Promise<ProductVariant> {
         const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
         const currentUserClientId = this.cls.get('clientId') as string | undefined;
         if (!currentUserRoles || !currentUserClientId) {
@@ -463,5 +463,6 @@ export class ProductVariantService {
           throw new ForbiddenException(`You do not have permission to delete this variant `);
         }
         await this.VariantRepo.remove(variant);
+        return variant;
     }
 }
