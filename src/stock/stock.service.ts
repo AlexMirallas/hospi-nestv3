@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, InternalServerErrorException, NotFoundException, ConflictException, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, QueryRunner, Repository, EntityManager, In, IsNull, FindOptionsWhere } from 'typeorm';
+import { DataSource, QueryRunner, Repository, EntityManager, In, IsNull, FindOptionsWhere,Brackets } from 'typeorm';
 import { StockLevel } from './entities/stock-level.entity';
 import { StockMovement, } from './entities/stock-movement.entity';
 import { Product } from '../products/entities/product.entity'; 
@@ -8,6 +8,8 @@ import { ProductVariant } from '../products/entities/product-variant.entity';
 import { ClsService } from 'nestjs-cls';
 import { Role } from '../common/enums/role.enum';
 import { StockMovementType } from '../common/enums/stock-movement.enum';
+import { GetStockHistoryQueryDto } from './dto/get-stock-history.dto';
+
 
 
 export interface RecordMovementData {
@@ -295,6 +297,79 @@ export class StockService {
     return stockMap;
   }
  
-  // async getStockHistory()
+  async getStockHistory(
+    queryDto: GetStockHistoryQueryDto,
+  ): Promise<{ data: StockMovement[]; total: number; page: number; limit: number }> {
+    const {
+      productId,
+      variantId,
+      movementType,
+      dateFrom,
+      dateTo,
+      page = 1,
+      limit = 10,
+      sortBy = 'movementDate',
+      sortOrder = 'DESC',
+    } = queryDto;
+
+    const clientId = this.cls.get('clientId');
+    const userRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
+
+    const queryBuilder = this.stockMovementRepository.createQueryBuilder('sm');
+
+    // Client ID filtering
+    if (!isSuperAdmin) {
+      if (!clientId) {
+        this.logger.error('[GetStockHistory] Client context (clientId) not found for non-SuperAdmin.');
+        throw new InternalServerErrorException('Client context (clientId) not found.');
+      }
+      queryBuilder.where('sm.clientId = :clientId', { clientId });
+    }
+// Product or Variant ID filtering
+    if (productId) {
+      queryBuilder.andWhere('sm.productId = :productId', { productId });
+    } else if (variantId) {
+      queryBuilder.andWhere('sm.variantId = :variantId', { variantId });
+    } else {
+      // Optional: Require either productId or variantId if not SuperAdmin,
+      // or allow SuperAdmin to see all if neither is provided.
+      // For now, let's assume if neither is provided, it fetches based on client (or all for superadmin)
+    }
+
+    if (movementType) {
+      queryBuilder.andWhere('sm.movementType = :movementType', { movementType });
+    }
+
+    if (dateFrom) {
+      queryBuilder.andWhere('sm.movementDate >= :dateFrom', { dateFrom: new Date(dateFrom) });
+    }
+    if (dateTo) {
+      // Adjust dateTo to include the whole day
+      const endDate = new Date(dateTo);
+      endDate.setHours(23, 59, 59, 999);
+      queryBuilder.andWhere('sm.movementDate <= :dateTo', { dateTo: endDate });
+    }
+
+    // Relations (optional, if you need user details etc. in the history)
+    queryBuilder.leftJoinAndSelect('sm.user', 'user');
+    // queryBuilder.leftJoinAndSelect('sm.product', 'product'); // If needed
+    // queryBuilder.leftJoinAndSelect('sm.variant', 'variant'); // If needed
+   // Sorting
+    const validSortFields = ['movementDate', 'movementType', 'quantityChange']; // Add other valid fields
+    if (validSortFields.includes(sortBy)) {
+        queryBuilder.orderBy(`sm.${sortBy}`, sortOrder);
+    } else {
+        queryBuilder.orderBy('sm.movementDate', 'DESC'); // Default sort
+    }
+
+
+    // Pagination
+    queryBuilder.skip((page - 1) * limit).take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    return { data, total, page, limit };
+  }
   // async adjustStock()
 }
