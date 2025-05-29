@@ -9,6 +9,7 @@ import { ClsService } from 'nestjs-cls';
 import { Role } from '../common/enums/role.enum';
 import { StockMovementType } from '../common/enums/stock-movement.enum';
 import { GetStockHistoryQueryDto } from './dto/get-stock-history.dto';
+import { UpdateStockMovementDto } from './dto/update-stock-movement.dto';
 
 
 
@@ -92,7 +93,7 @@ export class StockService {
       if (shouldManageTransaction && queryRunner) await queryRunner.release();
       throw new BadRequestException('Quantity change cannot be zero.');
     }
-    // --- End Input Validation ---
+    
 
     try {
       const productWhere: any = { id: data.productId};
@@ -113,7 +114,6 @@ export class StockService {
         clientId: clientId,
       };
 
-      console.log(`Finding stock level for ${data.productId ? 'product ' + data.productId : 'variant ' + data.variantId} with clientId ${clientId}`);
 
       let stockLevel = await manager.findOne(StockLevel, {
         where: stockLevelWhere,
@@ -122,16 +122,13 @@ export class StockService {
 
 
       if (!stockLevel) {
-        this.logger.log(`Creating initial stock level for ${data.productId ? 'product ' + data.productId : 'variant ' + data.variantId} stockLevel: ${stockLevel}`);
         const createData = {
           productId: data.productId,
           variantId: data.variantId, 
           clientId: clientId,
           quantity: 0,
         };
-        this.logger.debug(`Data for manager.create(StockLevel): ${JSON.stringify(createData)}`);
         stockLevel = manager.create(StockLevel, createData);
-        this.logger.debug(`Created stockLevel entity: ${JSON.stringify(stockLevel)}`);
        
         stockLevel = await manager.save(StockLevel, stockLevel);
        
@@ -153,8 +150,6 @@ export class StockService {
       stockLevel.quantity = newQuantity;
       await manager.save(StockLevel, stockLevel); 
 
-      this.logger.log(`Initial stock level created for ${data.productId ? 'product ' + data.productId : 'variant ' + data.variantId}: ${stockLevel.quantity}`);
-
       
       const movement = manager.create(StockMovement, {
         productId: data.productId,
@@ -174,7 +169,6 @@ export class StockService {
      
       if (shouldManageTransaction && queryRunner) {
         await queryRunner.commitTransaction();
-        this.logger.verbose('recordMovement committed its own transaction.');
     }
       return savedMovement;
 
@@ -205,34 +199,31 @@ export class StockService {
     const userRoles = this.cls.get('userRoles') as Role[] | undefined;
     const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
 
-    // --- Conditionally build the where clause ---
-    const where: FindOptionsWhere<StockLevel> = {}; // Use TypeORM's type
+    
+    const where: FindOptionsWhere<StockLevel> = {}; 
 
     if (!isSuperAdmin) {
       if (!clientId) {
-        this.logger.error('[GetCurrentStock] Client context (clientId) not found for non-SuperAdmin.');
         throw new InternalServerErrorException('Client context (clientId) not found.');
       }
-      where.clientId = clientId; // Apply clientId filter for non-SuperAdmins
+      where.clientId = clientId; 
     }
-    // SuperAdmin does not filter by clientId by default
+    
 
     if (itemType === 'product') {
       where.productId = itemId;
-      where.variantId = IsNull(); // Or null, based on previous findings
+      where.variantId = IsNull(); 
     } else {
       where.variantId = itemId;
     }
-    // --- End where clause ---
+    
 
-    this.logger.debug(`[GetCurrentStock] Executing findOne with where: ${JSON.stringify(where)} (SuperAdmin: ${isSuperAdmin})`);
 
     const stockLevel = await this.stockLevelRepository.findOne({
       where: where,
       select: ['quantity'],
      });
 
-    this.logger.debug(`[GetCurrentStock] Found stock level for item ${itemId} (${itemType}): ${JSON.stringify(stockLevel)}`);
     return stockLevel?.quantity ?? 0;
   }
 
@@ -244,25 +235,21 @@ export class StockService {
     const userRoles = this.cls.get('userRoles') as Role[] | undefined;
     const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
 
-    this.logger.debug(`[MultiStock] Received itemIds: ${JSON.stringify(itemIds)}, itemType: ${itemType}, SuperAdmin: ${isSuperAdmin}`);
 
     if (!itemIds || itemIds.length === 0) {
-       this.logger.debug('[MultiStock] No itemIds provided, returning empty map.');
       return new Map();
     }
 
-    // --- Conditionally build the where clause ---
-    const whereCondition: FindOptionsWhere<StockLevel> = {}; // Use TypeORM's type
+    
+    const whereCondition: FindOptionsWhere<StockLevel> = {}; 
 
     if (!isSuperAdmin) {
        if (!clientId) {
-         this.logger.error('[MultiStock] Client context (clientId) not found for non-SuperAdmin.');
-         // Depending on requirements, you might throw or return empty map
          throw new InternalServerErrorException('Client context (clientId) not found.');
        }
-       whereCondition.clientId = clientId; // Apply clientId filter for non-SuperAdmins
+       whereCondition.clientId = clientId; 
     }
-     // SuperAdmin does not filter by clientId by default
+    
 
     if (itemType === 'product') {
       whereCondition.productId = In(itemIds);
@@ -270,21 +257,18 @@ export class StockService {
     } else {
       whereCondition.variantId = In(itemIds);
     }
-    // --- End where clause ---
+    
 
-    this.logger.debug(`[MultiStock] Executing find with where: ${JSON.stringify(whereCondition)}`);
 
     const stockLevels = await this.stockLevelRepository.find({
       where: whereCondition,
       select: itemType === 'product' ? ['productId', 'quantity'] : ['variantId', 'quantity'],
     });
 
-    this.logger.debug(`[MultiStock] Found stockLevels from DB: ${JSON.stringify(stockLevels)}`);
 
-    // Initialize map with all requested IDs having 0 stock
     const stockMap = new Map<string, number>(itemIds.map(id => [id, 0]));
 
-    // Update map with actual quantities found
+    
     stockLevels.forEach(sl => {
       const id = itemType === 'product' ? sl.productId : sl.variantId;
       if (id) {
@@ -292,7 +276,6 @@ export class StockService {
       }
     });
 
-     this.logger.debug(`[MultiStock] Returning stockMap: ${JSON.stringify(Array.from(stockMap.entries()))}`);
 
     return stockMap;
   }
@@ -316,17 +299,17 @@ export class StockService {
     const userRoles = this.cls.get('userRoles') as Role[] | undefined;
     const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
 
+
     const queryBuilder = this.stockMovementRepository.createQueryBuilder('sm');
 
-    // Client ID filtering
+    
     if (!isSuperAdmin) {
       if (!clientId) {
-        this.logger.error('[GetStockHistory] Client context (clientId) not found for non-SuperAdmin.');
         throw new InternalServerErrorException('Client context (clientId) not found.');
       }
       queryBuilder.where('sm.clientId = :clientId', { clientId });
     }
-// Product or Variant ID filtering
+
     if (productId) {
       queryBuilder.andWhere('sm.productId = :productId', { productId });
     } else if (variantId) {
@@ -334,7 +317,6 @@ export class StockService {
     } else {
       // Optional: Require either productId or variantId if not SuperAdmin,
       // or allow SuperAdmin to see all if neither is provided.
-      // For now, let's assume if neither is provided, it fetches based on client (or all for superadmin)
     }
 
     if (movementType) {
@@ -345,31 +327,131 @@ export class StockService {
       queryBuilder.andWhere('sm.movementDate >= :dateFrom', { dateFrom: new Date(dateFrom) });
     }
     if (dateTo) {
-      // Adjust dateTo to include the whole day
       const endDate = new Date(dateTo);
       endDate.setHours(23, 59, 59, 999);
       queryBuilder.andWhere('sm.movementDate <= :dateTo', { dateTo: endDate });
     }
 
-    // Relations (optional, if you need user details etc. in the history)
+  
     queryBuilder.leftJoinAndSelect('sm.user', 'user');
-    // queryBuilder.leftJoinAndSelect('sm.product', 'product'); // If needed
-    // queryBuilder.leftJoinAndSelect('sm.variant', 'variant'); // If needed
-   // Sorting
-    const validSortFields = ['movementDate', 'movementType', 'quantityChange']; // Add other valid fields
+   
+    const validSortFields = ['movementDate', 'movementType', 'quantityChange']; 
     if (validSortFields.includes(sortBy)) {
         queryBuilder.orderBy(`sm.${sortBy}`, sortOrder);
     } else {
-        queryBuilder.orderBy('sm.movementDate', 'DESC'); // Default sort
+        queryBuilder.orderBy('sm.movementDate', 'DESC'); 
     }
-
-
-    // Pagination
+  
     queryBuilder.skip((page - 1) * limit).take(limit);
 
     const [data, total] = await queryBuilder.getManyAndCount();
+    
 
     return { data, total, page, limit };
   }
-  // async adjustStock()
+  
+  async getStockMovementById(movementId: string): Promise<StockMovement> {
+    const clientId = this.cls.get('clientId');
+    const userRoles = this.cls.get('userRoles') as Role[] | undefined;
+    const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
+
+    const queryBuilder = this.stockMovementRepository.createQueryBuilder('sm')
+      .where('sm.id = :movementId', { movementId });
+
+    if (!isSuperAdmin) {
+      if (!clientId) {
+        throw new InternalServerErrorException('Client context (clientId) not found.');
+      }
+      queryBuilder.andWhere('sm.clientId = :clientId', { clientId });
+    }
+
+    const movement = await queryBuilder
+      .leftJoinAndSelect('sm.user', 'user')
+      .getOne();
+
+    if (!movement) {
+      throw new NotFoundException(`Stock movement with ID ${movementId} not found.`);
+    }
+
+    return movement;
+  }
+
+  async updateStockMovement(
+    movementId: string,
+    correctionData: UpdateStockMovementDto,
+    externalQueryRunner?: QueryRunner,
+  ): Promise<{ originalMovement: StockMovement, reversalMovement: StockMovement, correctedMovement: StockMovement }> {
+    const shouldManageTransaction = !externalQueryRunner;
+    let queryRunner: QueryRunner | undefined = externalQueryRunner;
+
+    if (shouldManageTransaction) {
+      queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction('SERIALIZABLE');
+      this.logger.verbose(`correctStockMovement (${movementId}) started its own transaction.`);
+    } else {
+      this.logger.verbose(`correctStockMovement (${movementId}) operating within an external transaction.`);
+    }
+
+    try {
+      const manager = queryRunner!.manager;
+      const originalMovement = await manager.findOne(StockMovement, { where: { id: movementId } });
+
+      if (!originalMovement) {
+        throw new NotFoundException(`Stock movement with ID ${movementId} not found.`);
+      }
+      
+      // Permission check
+      const clientId = this.cls.get('clientId');
+      const userRoles = this.cls.get('userRoles') as Role[] | undefined;
+      if (!userRoles?.includes(Role.SuperAdmin) && originalMovement.clientId !== clientId) {
+          throw new ForbiddenException('You do not have permission to correct this stock movement.');
+      }
+
+      // 1. Reverse the original movement
+      const reversalMovementData: RecordMovementData = {
+        productId: originalMovement.productId,
+        variantId: originalMovement.variantId,
+        quantityChange: -originalMovement.quantityChange,
+        movementType: originalMovement.movementType,
+        reason: `Reversal for correction of movement ${originalMovement.id}.`,
+        sourceDocumentId: originalMovement.id,
+        sourceDocumentType: 'STOCK_MOVEMENT_CORRECTION',
+      };
+      const reversalMovement = await this.recordMovement(reversalMovementData, queryRunner);
+
+      // 2. Apply the new corrected movement
+      const correctedMovementData: RecordMovementData = {
+        productId: originalMovement.productId,
+        variantId: originalMovement.variantId,
+        quantityChange: correctionData.newQuantityChange,
+        movementType: correctionData.newMovementType || originalMovement.movementType, // Use new or original type
+        reason: correctionData.newReason || `Correction applied for movement ${originalMovement.id}.`,
+        sourceDocumentId: correctionData.newSourceDocumentId || originalMovement.id,
+        sourceDocumentType: correctionData.newSourceDocumentType || 'STOCK_MOVEMENT_CORRECTION',
+      };
+      const correctedMovement = await this.recordMovement(correctedMovementData, queryRunner);
+
+      
+      
+      await manager.save(StockMovement, originalMovement);
+
+      if (shouldManageTransaction) {
+        await queryRunner!.commitTransaction();
+      }
+      return { originalMovement, reversalMovement, correctedMovement };
+
+    } catch (error) {
+      if (shouldManageTransaction && queryRunner && queryRunner.isTransactionActive) {
+        await queryRunner.rollbackTransaction();
+      }
+      this.logger.error(`Failed to correct stock movement ${movementId}: ${error.message}`, error.stack);
+      throw error;
+    } finally {
+      if (shouldManageTransaction && queryRunner) {
+        await queryRunner.release();
+      }
+    }
+  }
+  
 }

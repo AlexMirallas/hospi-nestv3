@@ -1,7 +1,6 @@
 import { Controller, Post, Body, Get, Query, UseGuards, ValidationPipe, UsePipes, BadRequestException } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { AdjustStockDto } from './dto/adjust-stock.dto';
-import { GetStockHistoryQueryDto } from './dto/get-stock-history.dto';
 import { StockMovement } from './entities/stock-movement.entity';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'; 
 import { RolesGuard } from '../common/guards/roles.guard'; 
@@ -33,9 +32,7 @@ export class AdjustStockController {
     }
 
 
-    // The StockService.recordMovement method already takes RecordMovementData.
-    // We can map AdjustStockDto to it.
-    // userId and clientId will be picked up by StockService from CLS.
+    
     return this.stockService.recordMovement({
       productId: adjustStockDto.productId,
       variantId: adjustStockDto.variantId,

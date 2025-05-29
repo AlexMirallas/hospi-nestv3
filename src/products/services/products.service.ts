@@ -406,6 +406,28 @@ export class ProductsService {
       }
     }
     (product as any).currentStock = currentStock;
+
+    if (product.variants && product.variants.length > 0) {
+      const variantIds = product.variants.map(variant => variant.id);
+      if (variantIds.length > 0) {
+        try {
+          const variantStockMap = await this.stockService.getCurrentStockForMultipleItems(variantIds, 'variant');
+          product.variants = product.variants.map(variant => {
+            const variantWithStock = { ...variant };
+            (variantWithStock as any).currentStock = variantStockMap.get(variant.id) ?? 0;
+            return variantWithStock;
+          });
+        } catch (error) {
+          console.warn(`Could not fetch batch stock for variants of product ${id}: ${error.message}`);
+          // Optionally set currentStock to null or 0 for all variants if fetching fails
+          product.variants = product.variants.map(variant => {
+            const variantWithStock = { ...variant };
+            (variantWithStock as any).currentStock = null; // Or 0, depending on desired behavior
+            return variantWithStock;
+          });
+        }
+      }
+    }
     
     return product;
   }

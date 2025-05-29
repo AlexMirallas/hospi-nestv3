@@ -10,6 +10,11 @@ export interface SimpleRestParams {
   range?: [number, number];     
 }
 
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+}
+
 
 @Injectable()
 export class ParseSimpleRestParamsPipe implements PipeTransform<any, SimpleRestParams> {

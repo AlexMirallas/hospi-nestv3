@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Query, UseGuards, ValidationPipe, UsePipes, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Body, Get, Query, UseGuards, ValidationPipe, UsePipes, BadRequestException, UseInterceptors, Param, Put } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { GetStockHistoryQueryDto } from './dto/get-stock-history.dto';
 import { StockMovement } from './entities/stock-movement.entity';
@@ -7,9 +7,15 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorators'; 
 import { Role } from '../common/enums/role.enum';
 import { ClsService } from 'nestjs-cls';
+import { SimpleRestContentRangeInterceptor } from 'src/interceptors/global-interceptors';
+import { SimpleRestParams } from '../common/pipes/parse-simple-rest.pipe';
+import { ParseSimpleRestParamsPipe } from 'src/common/pipes/parse-simple-rest.pipe';
+import { PaginatedResponse } from '../common/pipes/parse-simple-rest.pipe';
+import { UpdateStockMovementDto } from './dto/update-stock-movement.dto';
 
 @Controller('stock-movements')
 @UseGuards(JwtAuthGuard, RolesGuard) 
+@UseInterceptors(SimpleRestContentRangeInterceptor) 
 export class StockMovementController {
   constructor(
     private readonly stockService: StockService,
@@ -20,19 +26,70 @@ export class StockMovementController {
   @Roles(Role.Admin, Role.SuperAdmin) 
   @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
   async getStockHistory(
-    @Query() queryDto: GetStockHistoryQueryDto,
-  ): Promise<{ data: StockMovement[]; total: number; page: number; limit: number }> {
-     console.log('Received queryDto:', JSON.stringify(queryDto));
-     if (!queryDto.productId && !queryDto.variantId) {
-        const userRoles = this.cls.get('userRoles') as Role[] | undefined;
-        const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
-        // Only throw if not super admin and neither ID is provided.
-        // SuperAdmin might be allowed to query all (though this could be a large dataset).
-        if (!isSuperAdmin) {
-            throw new BadRequestException('Either productId or variantId must be provided for stock history.');
-        }
+    @Query(ParseSimpleRestParamsPipe) params: SimpleRestParams,
+  ): Promise<PaginatedResponse<StockMovement>> { 
+
+    const { filters, sort, order, start, end } = params;
+
+    const serviceQueryDto = new GetStockHistoryQueryDto();
+
+    serviceQueryDto.productId = filters?.productId;
+    serviceQueryDto.variantId = filters?.variantId;
+    serviceQueryDto.movementType = filters?.movementType; 
+    serviceQueryDto.dateFrom = filters?.dateFrom;
+    serviceQueryDto.dateTo = filters?.dateTo;
+
+    serviceQueryDto.sortBy = sort;
+    serviceQueryDto.sortOrder = order;
+
+    
+    if (typeof start === 'number' && typeof end === 'number') {
+      const limit = end - start + 1;
+      serviceQueryDto.limit = limit > 0 ? limit : 10; 
+      serviceQueryDto.page = limit > 0 ? Math.floor(start / limit) + 1 : 1;
+    } else {
+      serviceQueryDto.page = 1;
+      serviceQueryDto.limit = 10;
     }
-    return this.stockService.getStockHistory(queryDto);
+
+    
+    if (!serviceQueryDto.productId && !serviceQueryDto.variantId) {
+      const userRoles = this.cls.get('userRoles') as Role[] | undefined;
+      const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
+      if (!isSuperAdmin) {
+        throw new BadRequestException('Either productId or variantId must be provided in the filter for stock history.');
+      }
+    }
+
+    const result = await this.stockService.getStockHistory(serviceQueryDto);
+
+    return {
+        data: result.data,
+        total: result.total
+    };
+  }
+  @Get(':id')
+  @Roles(Role.Admin, Role.SuperAdmin)
+  async getStockMovementById(@Param('id') id: string): Promise<StockMovement | null> {
+    if (!id) {
+      throw new BadRequestException('Stock movement ID is required');
+    }
+    return this.stockService.getStockMovementById(id);
+  
+  }
+
+  @Put(':id')
+  @Roles(Role.Admin, Role.SuperAdmin)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+  async updateStockMovement(
+    @Param('id') id: string,
+    @Body() updateStockMovementDto: UpdateStockMovementDto, 
+  ): Promise<StockMovement> {
+    if (!id) {
+      throw new BadRequestException('Stock movement ID is required');
+    }
+    const updateResult = await this.stockService.updateStockMovement(id, updateStockMovementDto);
+    return updateResult.correctedMovement;
   }
 }
  

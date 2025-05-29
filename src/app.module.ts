@@ -7,7 +7,6 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/modules/products.module';
 import { AttributesModule } from './attributes/attributes.module';
-import { CommonModule } from './common/common.module'; 
 import { User } from './users/entities/user.entity';
 import { Product } from './products/entities/product.entity';
 import { Category } from './categories/entities/category.entity';
@@ -56,7 +55,6 @@ import { StockLevel } from './stock/entities/stock-level.entity';
     UsersModule,
     ProductsModule,
     AttributesModule,
-    CommonModule,
     CategoriesModule,
     StockModule,
   ],
