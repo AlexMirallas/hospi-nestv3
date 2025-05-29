@@ -13,8 +13,8 @@ import {
     DeleteResult,
 } from 'typeorm';
 import { ClsService } from 'nestjs-cls';
-import { ProductImage } from '../entities/image.entity'; // Adjust path if needed
-import { Role } from '../../common/enums/role.enum'; // Adjust path if needed
+import { ProductImage } from '../entities/image.entity'; 
+import { Role } from '../../common/enums/role.enum'; 
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 
 @Injectable()
@@ -48,12 +48,12 @@ export class ImageRepository {
             throw new InternalServerErrorException('Client ID not found in request context for repository operation.');
         }
 
-        // Use 'image' as default alias if none provided, or use the provided alias
-        const effectiveAlias = alias || 'image'; // Default alias for ProductImage
+      
+        const effectiveAlias = alias || 'image'; 
         this.logger.debug(`Applying tenant condition for clientId=${clientId} on alias=${effectiveAlias}`);
 
         return {
-            condition: `${effectiveAlias}.clientId = :cls_clientId`, // Use a distinct param name
+            condition: `${effectiveAlias}.clientId = :cls_clientId`, 
             parameters: { cls_clientId: clientId },
         };
     }
@@ -66,7 +66,6 @@ export class ImageRepository {
         tenantClientId: string | undefined
     ): FindOptionsWhere<ProductImage> | FindOptionsWhere<ProductImage>[] | undefined {
         if (!tenantClientId) {
-            // No tenant filter needed (SuperAdmin or condition already applied elsewhere)
             return originalWhere;
         }
 
@@ -76,23 +75,20 @@ export class ImageRepository {
             return tenantWhere;
         }
 
-        // Handle OR conditions (array of where clauses)
         if (Array.isArray(originalWhere)) {
             return originalWhere.map(condition => ({ ...condition, ...tenantWhere }));
         }
 
-        // Handle single AND condition object
+    
         return { ...originalWhere, ...tenantWhere };
     }
 
-    // --- Tenant-Aware Query Methods ---
 
     createQueryBuilder(alias: string = 'image', queryRunner?: any): SelectQueryBuilder<ProductImage> {
         const qb = this.repository.createQueryBuilder(alias, queryRunner);
         const tenantCondition = this.getTenantCondition(alias);
 
         if (tenantCondition) {
-            // Apply the condition using the parameters from getTenantCondition
             qb.andWhere(tenantCondition.condition, tenantCondition.parameters);
         }
         return qb;
@@ -100,13 +96,12 @@ export class ImageRepository {
 
     async findOne(options: FindOneOptions<ProductImage>): Promise<ProductImage | null> {
         const tenantCondition = this.getTenantCondition();
-        // Use helper to merge tenant clientId into the where clause if applicable
         const finalWhere = this.addTenantWhere(options.where, tenantCondition?.parameters.cls_clientId);
         this.logger.debug(`findOne with finalWhere: ${JSON.stringify(finalWhere)}`);
 
         return this.repository.findOne({
             ...options,
-            where: finalWhere, // Use the potentially modified where clause
+            where: finalWhere, 
         });
     }
 
@@ -115,7 +110,6 @@ export class ImageRepository {
         const finalWhere = this.addTenantWhere(where, tenantCondition?.parameters.cls_clientId);
         this.logger.debug(`findOneBy with finalWhere: ${JSON.stringify(finalWhere)}`);
 
-        // Ensure findOneBy is called with a valid where clause, even if original was empty
         return this.repository.findOneBy(finalWhere || {});
     }
 
@@ -181,9 +175,7 @@ export class ImageRepository {
         return this.repository.countBy(finalWhere || {});
     }
 
-    // --- Standard Repository Methods (Pass-through or with potential future tenant logic) ---
 
-    // Consider adding automatic clientId setting here if desired for non-SuperAdmins
     create(entityLike: DeepPartial<ProductImage>): ProductImage {
         const { cls_clientId } = this.getTenantCondition()?.parameters || {};
         const userRoles = this.cls.get('userRoles') as Role[] | undefined;
@@ -194,21 +186,18 @@ export class ImageRepository {
             entityLike.clientId = cls_clientId;
         } else if (!entityLike.clientId) {
              this.logger.warn(`Creating ProductImage without explicit clientId (User isSuperAdmin: ${isSuperAdmin}).`);
-             // Potentially throw if SuperAdmin MUST provide clientId
-             // throw new BadRequestException('SuperAdmin must explicitly provide clientId when creating ProductImage.');
         }
         return this.repository.create(entityLike);
     }
 
-    // Consider adding tenant validation before save for non-SuperAdmins
+    
     async save<T extends DeepPartial<ProductImage>>(entity: T, options?: SaveOptions): Promise<T>
     async save<T extends DeepPartial<ProductImage>>(entities: T[], options?: SaveOptions): Promise<T[]>
     async save<T extends DeepPartial<ProductImage>>(entityOrEntities: T | T[], options?: SaveOptions): Promise<T | T[]> {
-        // Add pre-save tenant check if needed:
+        
         const { cls_clientId } = this.getTenantCondition()?.parameters || {};
-        const isSuperAdmin = !cls_clientId; // Simplified check based on getTenantCondition logic
+        const isSuperAdmin = !cls_clientId; 
         const checkEntity = (e: T) => {
-            // Check if the entity has a clientId property before accessing it
             if ('clientId' in e && !isSuperAdmin && e.clientId !== cls_clientId) {
                 this.logger.warn(`Attempt to save entity with mismatched clientId. Expected ${cls_clientId}, got ${e.clientId}`);
                 throw new ForbiddenException(`Cannot save entity belonging to another client.`);
@@ -219,29 +208,26 @@ export class ImageRepository {
         return this.repository.save(entityOrEntities as any, options);
     }
 
-    // Consider adding tenant validation before remove for non-SuperAdmins
+  
     async remove(entity: ProductImage, options?: RemoveOptions): Promise<ProductImage>
     async remove(entities: ProductImage[], options?: RemoveOptions): Promise<ProductImage[]>
     async remove(entityOrEntities: ProductImage | ProductImage[], options?: RemoveOptions): Promise<ProductImage | ProductImage[]> {
-         // Add pre-remove tenant check if needed (similar to save)
+       
         return this.repository.remove(entityOrEntities as any, options);
     }
 
-    // Delete bypasses tenant checks more easily, use remove for safety
+    
     async delete(criteria: FindOptionsWhere<ProductImage> | string | string[]): Promise<DeleteResult> {
         this.logger.warn('ProductImageRepository.delete might bypass tenant filtering. Use remove(entity) after fetching for safety.');
-        // Attempt to apply tenant filter if criteria is an object, but be cautious
         const tenantCondition = this.getTenantCondition();
         let finalCriteria = criteria as any;
 
         if (tenantCondition?.parameters.cls_clientId) {
             const tenantClientId = tenantCondition.parameters.cls_clientId;
             if (typeof finalCriteria === 'string' || Array.isArray(finalCriteria)) {
-                 // Cannot safely apply tenant filter to IDs directly
                  this.logger.error('Cannot safely apply tenant filter to delete by ID(s). Fetch and use remove().');
                  throw new Error('Cannot safely apply tenant filter to delete by ID(s). Fetch and use remove().');
             } else if (typeof finalCriteria === 'object') {
-                 // Merge tenantId into the criteria object
                  finalCriteria = { ...finalCriteria, clientId: tenantClientId };
                  this.logger.debug(`Applying tenant filter to delete criteria: ${JSON.stringify(finalCriteria)}`);
             }
@@ -253,7 +239,6 @@ export class ImageRepository {
         const tenantCondition = this.getTenantCondition();
         const finalCriteria = this.addTenantWhere(criteria, tenantCondition?.parameters.cls_clientId);
         this.logger.debug(`update with finalCriteria: ${JSON.stringify(finalCriteria)}`);
-        // This ensures non-SuperAdmins can only update their own records based on the criteria
         const resolvedCriteria = Array.isArray(finalCriteria) ? finalCriteria[0] : finalCriteria;
         return this.repository.update(resolvedCriteria || {}, partialEntity);
     }

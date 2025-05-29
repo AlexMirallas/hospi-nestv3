@@ -10,11 +10,11 @@ import { ImagesService } from '../services/images.service';
 import { ImagesController } from '../controllers/images.controller';
 import { ClsModule, ClsService } from 'nestjs-cls';
 import { ImageRepository } from '../repositories/image.repository';
+import { Role } from 'src/common/enums/role.enum';
 
-// Define the base upload directory
 const UPLOAD_DIR = join(process.cwd(), 'uploads', 'products');
 
-// Ensure the base directory exists
+
 if (!fs.existsSync(UPLOAD_DIR)) {
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
@@ -24,15 +24,21 @@ if (!fs.existsSync(UPLOAD_DIR)) {
     TypeOrmModule.forFeature([ProductImage]),
     ClsModule, 
     MulterModule.registerAsync({
-      imports: [ClsModule], // Make CLS available in the factory
+      imports: [ClsModule], 
       useFactory: (cls: ClsService) => ({
         storage: diskStorage({
           destination: (req, file, cb) => {
-            // Use CLS to get client ID for subdirectory
-            const clientId = cls.get('clientId') || 'shared'; // Fallback if needed
+            const userRoles = cls.get('userRoles') || [];
+            let clientId: string;
+            if( userRoles.includes(Role.SuperAdmin)){
+              clientId = 'shared';
+            }else{
+              clientId = cls.get('clientId') || 'default';
+            }
+             
             const clientDir = join(UPLOAD_DIR, clientId);
 
-            // Ensure client-specific directory exists
+            
             if (!fs.existsSync(clientDir)) {
               fs.mkdirSync(clientDir, { recursive: true });
             }
@@ -46,7 +52,6 @@ if (!fs.existsSync(UPLOAD_DIR)) {
         }),
         fileFilter: (req, file, cb) => {
           if (!file.mimetype.match(/\/(jpg|jpeg|png|gif|webp)$/)) {
-            // Reject non-image files
             return cb(
               new BadRequestException('Only image files are allowed!'),
               false,
@@ -58,11 +63,11 @@ if (!fs.existsSync(UPLOAD_DIR)) {
           fileSize: 5 * 1024 * 1024, // 5MB limit
         },
       }),
-      inject: [ClsService], // Inject ClsService into the factory
+      inject: [ClsService], 
     }),
   ],
   controllers: [ImagesController],
   providers: [ImagesService, ImageRepository],
-  exports: [ImagesService], // Export if needed by other modules
+  exports: [ImagesService], 
 })
 export class ImagesModule {}

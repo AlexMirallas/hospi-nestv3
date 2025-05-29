@@ -30,21 +30,21 @@ import {
   import { Role } from '../../common/enums/role.enum';
   import { UpdateImageDetailsDto } from '../dto/update/update-image-details.dto'; 
   
-  @Controller('images') // Base path for image operations
+  @Controller('images') 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.Admin, Role.SuperAdmin) // Restrict access
+  @Roles(Role.Admin, Role.SuperAdmin) 
   export class ImagesController {
     constructor(private readonly imagesService: ImagesService) {}
     
 
     @Get()
-    @Roles(Role.Admin, Role.SuperAdmin) // Apply roles if needed for GET list
+    @Roles(Role.Admin, Role.SuperAdmin) 
     async findAll(
       @Query('filter') filterString: string = '{}',
       @Query('range') rangeString: string = '[0,9]',
       @Query('sort') sortString: string = '["id","ASC"]',
       @Res({ passthrough: true }) res: import('express').Response
-  ): Promise<any> { // Consider using a DTO for the response type
+  ): Promise<any> { 
 
     const filter = JSON.parse(filterString);
     const rangeArray = JSON.parse(rangeString);
@@ -68,14 +68,13 @@ import {
     };
     const { data, total } = await this.imagesService.findPaginated(params);
 
-    // Set Content-Range header for react-admin
+   
     const [start, end] = range;
     const contentRange = `images ${start}-${start + data.length - 1}/${total}`;
     res.setHeader('Content-Range', contentRange);
-    // Optional: Set X-Total-Count if your frontend prefers it
-    // res.setHeader('X-Total-Count', total.toString());
+    
 
-    return data; // react-admin expects the array of data directly in the response body
+    return data; 
   }
 
   @Get(':imageId')
@@ -83,9 +82,9 @@ import {
     return this.imagesService.findOneImage(imageId);
   }
 
-    // Endpoint to upload an image for a specific PRODUCT
+    
   @Post('product/:productId')
-  @UseInterceptors(FileInterceptor('image')) // 'image' is the field name in the form-data
+  @UseInterceptors(FileInterceptor('image')) 
   async uploadProductImage(
     @Param('productId', ParseUUIDPipe) productId: string,
     @UploadedFile() file: Express.Multer.File,
@@ -110,7 +109,7 @@ import {
     );
   }
   
-    // Endpoint to upload an image for a specific VARIANT
+  
     @Post('variant/:variantId')
     @UseInterceptors(FileInterceptor('image'))
     async uploadVariantImage(
@@ -153,6 +152,4 @@ import {
       return this.imagesService.deleteImage(imageId);
     }
   
-    // Add GET endpoints to list images for product/variant if needed
-    // Add PATCH endpoint to update altText, displayOrder, isPrimary if needed
   }

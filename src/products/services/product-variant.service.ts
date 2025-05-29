@@ -13,11 +13,11 @@ import { DataSource,In, QueryRunner } from "typeorm";
 import { Role } from "../../common/enums/role.enum";
 import { StockService } from "src/stock/stock.service";
 import { StockMovementType } from "src/common/enums/stock-movement.enum";
-import { StockMovement } from "src/stock/entities/stock-movement.entity"; // Import
-import { StockLevel } from "src/stock/entities/stock-level.entity"; // Import
-import { ProductImage } from "../entities/image.entity"; // Import
-import * as fs from 'fs-extra'; // Import fs-extra for robust file operations
-import * as path from 'path'; // Import path
+import { StockMovement } from "src/stock/entities/stock-movement.entity"; 
+import { StockLevel } from "src/stock/entities/stock-level.entity"; 
+import { ProductImage } from "../entities/image.entity"; 
+import * as fs from 'fs-extra';
+import * as path from 'path'; 
 
 
 

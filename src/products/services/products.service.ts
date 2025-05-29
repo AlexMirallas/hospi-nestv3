@@ -17,13 +17,11 @@ import { CategoryRepository } from '../../categories/repositories/category.repos
 import { ClsService } from 'nestjs-cls';
 import { Role } from '../../common/enums/role.enum';
 import { StockService } from 'src/stock/stock.service';
-import { StockMovementType } from '../../common/enums/stock-movement.enum';
 import { StockMovement } from 'src/stock/entities/stock-movement.entity';
 import { StockLevel } from 'src/stock/entities/stock-level.entity';
 import { ProductImage } from '../entities/image.entity';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { Console } from 'console';
 
 
 @Injectable()
@@ -147,7 +145,7 @@ export class ProductsService {
 
    
     if (allAttributeValueIds.length > 0) {
-        const uniqueAttributeValueIds = [...new Set(allAttributeValueIds)]; // Ensure uniqueness
+        const uniqueAttributeValueIds = [...new Set(allAttributeValueIds)]; 
 
         let idsForQuery: (string | number)[];
         try {
@@ -179,7 +177,7 @@ export class ProductsService {
             throw new BadRequestException(`Attribute values not found or inaccessible: ${missingIds.join(', ')}`);
         }
 
-        // Create a map for easy lookup
+    
         attributeValueMap = new Map(fetchedAttributeValues.map(av => [av.id.toString(), av]));
     }
 
@@ -208,7 +206,7 @@ export class ProductsService {
             for (const dtoAttributeValue of variantDto.attributeValues) {
                 const attributeValueId = dtoAttributeValue.attributeValueId; 
                 if (!attributeValueId) {
-                    // ... error handling ...
+                    throw new BadRequestException('Attribute value ID is required for each attribute value in the variant.');
                 }
                 const currentAttributeValue = attributeValueMap.get(attributeValueId);
 
@@ -246,7 +244,7 @@ export class ProductsService {
     const take = end - start + 1;
     const skip = start;
     
-    // Build a query builder for more complex queries
+    
     const queryBuilder = this.ProductRepo.createQueryBuilder('product')
       .leftJoinAndSelect('product.categories', 'category')
       .leftJoinAndSelect('product.variants', 'variant')
@@ -360,13 +358,11 @@ export class ProductsService {
     (product as any).categoryIds = categoryIds;
 
     let currentStock: number | null = null;
-    // Fetch stock only if tracking is enabled AND there are no variants
     if (product.trackInventory && (!product.variants || product.variants.length === 0)) {
       try {
         currentStock = await this.stockService.getCurrentStock(product.id, 'product');
       } catch (error) {
         console.warn(`Could not fetch stock for product ${id}: ${error.message}`);
-        // currentStock remains null
       }
     }
     (product as any).currentStock = currentStock;
@@ -383,10 +379,9 @@ export class ProductsService {
           });
         } catch (error) {
           console.warn(`Could not fetch batch stock for variants of product ${id}: ${error.message}`);
-          // Optionally set currentStock to null or 0 for all variants if fetching fails
           product.variants = product.variants.map(variant => {
             const variantWithStock = { ...variant };
-            (variantWithStock as any).currentStock = null; // Or 0, depending on desired behavior
+            (variantWithStock as any).currentStock = null; 
             return variantWithStock;
           });
         }

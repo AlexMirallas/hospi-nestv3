@@ -34,11 +34,10 @@ import {
       const take = end - start + 1;
       const skip = start;
   
-      // Where clause only contains application-specific filters
+    
       const where: FindOptionsWhere<ProductImage> = {};
   
-      // Apply Filters (productId, variantId, potentially clientId for SuperAdmin)
-      // The repository's findAndCount method will handle tenant filtering
+  
       if (filters.clientId) {
           where.clientId = filters.clientId as string;
       }
@@ -49,15 +48,15 @@ import {
         where.variantId = filters.variantId as string;
       }
   
-      // Define Sorting
+     
       const order: FindOptionsOrder<ProductImage> = {};
       const validSortFields = ['id', 'filename', 'displayOrder', 'createdAt', 'updatedAt', 'altText', 'isPrimary'];
        if (validSortFields.includes(sortField)) {
           order[sortField as keyof ProductImage] = sortOrder as 'ASC' | 'DESC';
       } else {
-          order.displayOrder = 'ASC'; // Default sort
+          order.displayOrder = 'ASC'; 
       }
-      // Fetch Data using the tenant-aware repository method
+    
    try {
         const [data, total] = await this.imageRepository.findAndCount({
           where,
@@ -118,7 +117,7 @@ import {
       }
     }
   
-      const relativePath = file.path.replace(process.cwd(), '').replace(/\\/g, '/'); // Store relative path
+      const relativePath = file.path.replace(process.cwd(), '').replace(/\\/g, '/'); 
   
       const imageData: Partial<ProductImage> = {
         filename: file.filename,
@@ -169,7 +168,6 @@ import {
       }
   
       try {
-          // Use the repository's remove method
           await this.imageRepository.remove(image);
          
       } catch(error) {
@@ -185,7 +183,6 @@ import {
 
     async findOneImage(imageId: string): Promise<ProductImage> {
       try {
-        // Use tenant-aware findOneByOrFail
         const image = await this.imageRepository.findOneByOrFail({ id: imageId });
         return image;
       } catch (error) {
@@ -193,9 +190,8 @@ import {
           throw error;
         }
         if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
-          throw error; // Re-throw specific errors from repository/context
+          throw error; 
         }
-        // Generic error if something else went wrong
         throw new InternalServerErrorException(`Failed to retrieve image ${imageId}.`);
       }
     }
@@ -206,16 +202,12 @@ import {
     ): Promise<ProductImage> {
       console.log(`Updating image details for ID: ${imageId} with data: ${JSON.stringify(updateDto)}`);
   
-      // Fetch the image using tenant-aware method to ensure ownership/existence
-      const image = await this.findOneImage(imageId); // Reuse findOneImage for consistency
+      const image = await this.findOneImage(imageId); 
   
-      // Check if setting as primary
       if (updateDto.isPrimary === true && !image.isPrimary) {
         console.log(`Setting image ${imageId} as primary. Unsetting others for product=${image.productId}, variant=${image.variantId}`);
-        // Ensure productId/variantId are available on the fetched image entity
         if (!image.productId && !image.variantId) {
           console.error(`Image ${imageId} is missing product/variant association, cannot unset primary.`);
-          // Handle this case appropriately - maybe throw an error or just log
         } else {
            await this.unsetOtherPrimaryImages(image.productId, image.variantId);
         }
@@ -230,14 +222,14 @@ import {
         image.isPrimary = updateDto.isPrimary;
     }
     try {
-      // Save the updated entity using tenant-aware save
+    
       const updatedImage = await this.imageRepository.save(image);
       console.log(`Successfully updated image ${imageId}`);
       return updatedImage;
     } catch (error) {
       console.error(`Failed to save updated image details for ${imageId}: ${error.message}`, error.stack);
        if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
-        throw error; // Re-throw specific errors from repository/context
+        throw error; 
       }
       throw new InternalServerErrorException(`Failed to update image details for ${imageId}.`);
     }
@@ -247,7 +239,6 @@ import {
     productId?: string,
     variantId?: string,
   ): Promise<void> {
-    // Where clause doesn't need clientId manually added
     const whereCondition: FindOptionsWhere<ProductImage> = { isPrimary: true };
     if (productId) {
       whereCondition.productId = productId;
@@ -258,7 +249,6 @@ import {
     }
 
     try {
-        // Use the repository's update method
         const result = await this.imageRepository.update(whereCondition, { isPrimary: false });
     } catch (error) {
          if (error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
