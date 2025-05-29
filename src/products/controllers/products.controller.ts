@@ -54,7 +54,6 @@ export class ProductsController {
     @Res({ passthrough: true }) res: Response
   ) {
     try {
-      // Parse the query parameters
       const filter = JSON.parse(filterString);
       const range = JSON.parse(rangeString);
       const sort = JSON.parse(sortString);

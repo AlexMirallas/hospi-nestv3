@@ -10,6 +10,8 @@
 .env.production.local
 .env.local
 
+uploads/
+
 
 
 

@@ -92,6 +92,7 @@ import {
     @Body('altText') altText?: string,
     @Body('isPrimary', new ParseBoolPipe({ optional: true })) isPrimary: boolean = false,
     @Body('displayOrder', new DefaultValuePipe(0), ParseIntPipe) displayOrder: number = 0,
+    @Body('clientId', ParseUUIDPipe) clientId?: string, 
   ) {
     if (!file) {
       throw new BadRequestException('Image file is required.');
@@ -105,6 +106,7 @@ import {
       displayOrder,
       productId,
       undefined, 
+      clientId, 
     );
   }
   
@@ -117,6 +119,7 @@ import {
       @Body('altText') altText?: string,
       @Body('isPrimary', new ParseBoolPipe({ optional: true })) isPrimary: boolean = false,
       @Body('displayOrder', new DefaultValuePipe(0), ParseIntPipe) displayOrder: number = 0,
+      @Body('clientId', ParseUUIDPipe) clientId?: string,
     ) {
       if (!file) {
         throw new BadRequestException('Image file is required.');
@@ -128,6 +131,7 @@ import {
         displayOrder,
         undefined, 
         variantId,
+        clientId
       );
     }
 
@@ -136,7 +140,6 @@ import {
     @Param('imageId', ParseUUIDPipe) imageId: string,
     @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })) updateDto: UpdateImageDetailsDto,
   ) {
-    // Check if the DTO is empty, which might indicate an issue or no-op
     if (Object.keys(updateDto).length === 0) {
         throw new BadRequestException('No update data provided.');
     }

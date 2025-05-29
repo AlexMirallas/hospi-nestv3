@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, ForbiddenException,ConflictException } from '@nestjs/common';
 import { InjectRepository, } from '@nestjs/typeorm';
-import { Repository, In, DataSource, QueryRunner } from 'typeorm';
+import { Repository, In, DataSource, QueryRunner, IsNull } from 'typeorm';
 import { Product } from '../entities/product.entity';
 import { ProductVariant } from '../entities/product-variant.entity';
 import { ProductAttributeValue } from '../entities/product-attribute-value.entity';
@@ -18,6 +18,12 @@ import { ClsService } from 'nestjs-cls';
 import { Role } from '../../common/enums/role.enum';
 import { StockService } from 'src/stock/stock.service';
 import { StockMovementType } from '../../common/enums/stock-movement.enum';
+import { StockMovement } from 'src/stock/entities/stock-movement.entity';
+import { StockLevel } from 'src/stock/entities/stock-level.entity';
+import { ProductImage } from '../entities/image.entity';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import { Console } from 'console';
 
 
 @Injectable()
@@ -75,7 +81,6 @@ export class ProductsService {
         isActive: createProductDto.isActive ?? true,
         clientId: finalClientId,
         trackInventory: createProductDto.trackInventory ?? true,
-        initialStock: createProductDto.initialStock ?? 0, 
       });
 
       
@@ -99,29 +104,7 @@ export class ProductsService {
       
       const shouldTrackProductStock = savedProduct.trackInventory;
       const hasVariantsInDto = createProductDto.variants && createProductDto.variants.length > 0;
-      const initialStockValue = createProductDto.initialStock;
-
-      if (shouldTrackProductStock && !hasVariantsInDto && typeof initialStockValue === 'number' && initialStockValue >= 0) {
-        console.log(`Recording initial stock (${initialStockValue}) for product ${savedProduct.id}`);
-        await this.stockService.recordMovement({
-          productId: savedProduct.id,
-          quantityChange: initialStockValue,
-          movementType: StockMovementType.INITIAL,
-          clientId: finalClientId,  
-        }, queryRunner);  
-      } else if (shouldTrackProductStock && !hasVariantsInDto && initialStockValue === undefined) {
-          console.log(`Product ${savedProduct.id} tracking inventory but no initial stock provided. Starting at 0.`);
-          await this.stockService.recordMovement({
-              productId: savedProduct.id,
-              quantityChange: 0, 
-              movementType: StockMovementType.INITIAL,
-              clientId: finalClientId,
-          }, queryRunner);
-      } else if (!shouldTrackProductStock) {
-         console.log(`Inventory tracking disabled for product ${savedProduct.id}. Skipping initial stock.`);
-      } else if (hasVariantsInDto) {
-        console.log(`Product ${savedProduct.id} has variants in DTO. Initial stock will be handled at variant level.`);
-      }
+      
       
       if (createProductDto.variants && createProductDto.variants.length > 0) {
         await this.createVariantsForProduct(product, createProductDto.variants, queryRunner); // Pass queryRunner
@@ -216,26 +199,7 @@ export class ProductsService {
         });
 
         const savedVariant = await queryRunner.manager.save(ProductVariant, variant);
-        const initialStockValue = variantDto.initialStock; // Get from DTO
-        if (typeof initialStockValue === 'number' && initialStockValue >= 0) {
-          console.log(`Recording initial stock (${initialStockValue}) for variant ${savedVariant.id}`);
-          // Call StockService within the transaction
-          await this.stockService.recordMovement({
-              variantId: savedVariant.id, 
-              quantityChange: initialStockValue,
-              movementType: StockMovementType.INITIAL,
-              clientId: product.clientId, 
-          });
-          console.log(`Initial stock recorded for variant ${savedVariant.id}`);
-      } else {
-           console.log(`No valid initial stock provided for variant ${savedVariant.id}. Stock level will start at 0 if accessed.`);
-           await this.stockService.recordMovement({
-               variantId: savedVariant.id,
-               quantityChange: 0,
-               movementType: StockMovementType.INITIAL,
-              clientId: product.clientId,
-           });
-      }
+        
 
         const attributeValueEntities: ProductAttributeValue[] = [];
         if (variantDto.attributeValues && variantDto.attributeValues.length > 0) {
@@ -517,29 +481,90 @@ export class ProductsService {
   async remove(id: string): Promise<Product> {
     const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
     const currentUserClientId = this.cls.get('clientId') as string | undefined;
-    if (!currentUserRoles || !currentUserClientId) {
+    if (!currentUserRoles || !currentUserClientId && !currentUserRoles?.includes(Role.SuperAdmin)) {
       throw new InternalServerErrorException('User context not found.');
     }
     const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
-    
-    const product = await this.ProductRepo.findOneBy({ id });
 
-    if (!product) {
-      throw new NotFoundException(`Product with ID ${id} not found`);
-    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction('SERIALIZABLE');
 
-    if (!isSuperAdmin && product.clientId !== currentUserClientId) {
-      console.warn(`Admin ${currentUserClientId} attempting to delete product ${product.id} owned by client ${product.clientId}.`);
-      throw new ForbiddenException(`You do not have permission to delete products for client ${product.clientId}.`);
-  }
-    try{
-      await this.ProductRepo.remove(product);
-    }catch(error){
-      console.error("Error deleting product:", error);
-      throw new InternalServerErrorException(`Failed to delete product: ${error.message}`);
-    }finally{
-      console.log(`Product with ID ${id} deleted successfully`);
+    try {
+      const product = await queryRunner.manager.findOne(Product, {
+        where: { id },
+        relations: { variants: true }, 
+      });
+
+      if (!product) {
+        throw new NotFoundException(`Product with ID ${id} not found`);
+      }
+
+      const targetClientId = product.clientId;
+
+      if (!isSuperAdmin && targetClientId !== currentUserClientId) {
+        throw new ForbiddenException(`You do not have permission to delete this product.`);
+      }
+
+      if (product.variants && product.variants.length > 0) {
+        for (const variant of product.variants) {
+          await queryRunner.manager.delete(ProductAttributeValue, { variant: { id: variant.id } });
+          await queryRunner.manager.delete(StockMovement, { variantId: variant.id, clientId: targetClientId });
+          await queryRunner.manager.delete(StockLevel, { variantId: variant.id, clientId: targetClientId });
+
+
+          const variantImages = await queryRunner.manager.find(ProductImage, { where: { variantId: variant.id, clientId: targetClientId } });
+          if (variantImages.length > 0) {
+            for (const image of variantImages) {
+              try {
+                const filePath = path.join(process.cwd(), image.path);
+                if (await fs.pathExists(filePath)) {
+                  await fs.unlink(filePath);
+                } else {
+                  console.warn(`Physical image file not found at ${filePath} for image ID ${image.id}`);
+                }
+              } catch (fileError) {
+                throw new InternalServerErrorException(`Error deleting physical image file ${image.path} for variant ${variant.id}: ${fileError.message}`);
+              }
+            }
+            await queryRunner.manager.remove(variantImages);
+          }
+        }
+        await queryRunner.manager.remove(ProductVariant, product.variants);
+      }
+
+      await queryRunner.manager.delete(StockMovement, { productId: product.id, variantId: null, clientId: targetClientId }); 
+      await queryRunner.manager.delete(StockLevel, { productId: product.id, variantId: IsNull(), clientId: targetClientId });
+
+
+      const productImages = await queryRunner.manager.find(ProductImage, { where: { productId: product.id, variantId: IsNull(), clientId: targetClientId } });
+      if (productImages.length > 0) {
+        for (const image of productImages) {
+           try {
+            const filePath = path.join(process.cwd(), image.path);
+            if (await fs.pathExists(filePath)) {
+              await fs.unlink(filePath);
+            } else {
+              console.warn(`Physical image file not found at ${filePath} for image ID ${image.id}`);
+            }
+          } catch (fileError) {
+            throw new InternalServerErrorException(`Error deleting physical image file ${image.path} for product ${id}: ${fileError.message}`);
+          }
+        }
+        await queryRunner.manager.remove(productImages);
+      }
+
+      await queryRunner.manager.remove(Product, product);
+      await queryRunner.commitTransaction();
       return product;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(`Failed to remove product ${id}: ${error.message}`);
+    } finally {
+      await queryRunner.release();
     }
   }
 }

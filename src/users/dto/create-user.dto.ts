@@ -26,7 +26,7 @@ export class CreateUserDto {
   @IsOptional()
   @IsArray()
   @IsEnum(Role, { each: true })
-  roles?: Role[] = [Role.User]; // Default role
+  roles?: Role[] = [Role.User]; 
 
   @IsNotEmpty()
   @IsUUID()

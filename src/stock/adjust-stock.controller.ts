@@ -41,7 +41,7 @@ export class AdjustStockController {
       reason: adjustStockDto.reason,
       sourceDocumentId: adjustStockDto.sourceDocumentId,
       sourceDocumentType: adjustStockDto.sourceDocumentType,
-      // userId and clientId are handled by the service via CLS
+      clientId: adjustStockDto.clientId ?? this.cls.get('clientId'), 
     });
   }
 }

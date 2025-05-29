@@ -12,7 +12,7 @@ import {
   import * as fs from 'fs';
   import { join } from 'path';
   import { UpdateImageDetailsDto } from '../dto/update/update-image-details.dto';
-  
+  import { Role } from '../../common/enums/role.enum';
   import { SimpleRestParams } from '../../common/pipes/parse-simple-rest.pipe'
   
   @Injectable()
@@ -86,7 +86,6 @@ import {
     ): Promise<ProductImage> {
   
       if ((!productId && !variantId) || (productId && variantId)) {
-        // Clean up uploaded file if validation fails early
         fs.unlink(file.path, (err) => {
           if (err) console.error('Error deleting orphaned file:', file.path, err);
         });
@@ -95,17 +94,39 @@ import {
         );
       }
   
-      // TODO: Add validation to ensure the product/variant exists and belongs to the client (unless SuperAdmin)
+      const currentUserClientId = this.cls.get('clientId');
+      const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
+      const isSuperAdmin = currentUserRoles?.includes(Role.SuperAdmin);
+
+      let targetClientId:string | undefined;
+
+      if( isSuperAdmin) {
+        if (!clientId) {
+          console.error('SuperAdmin uploading image without clientId');
+          throw new BadRequestException('SuperAdmin must provide clientId when uploading images.');
+        }
+        targetClientId = clientId;
+      } else {
+        if (currentUserClientId) {
+          targetClientId = currentUserClientId;
+          if (!targetClientId) {
+          fs.unlink(file.path, (err) => { 
+            if (err) console.error('Error deleting file for missing clientId:', file.path, err);
+           });
+          throw new InternalServerErrorException('User client context not found.');
+        }
+      }
+    }
   
       const relativePath = file.path.replace(process.cwd(), '').replace(/\\/g, '/'); // Store relative path
   
       const imageData: Partial<ProductImage> = {
         filename: file.filename,
-        path: relativePath.startsWith('/') ? relativePath : `/${relativePath}`, // Ensure leading slash
+        path: relativePath.startsWith('/') ? relativePath : `/${relativePath}`, 
         originalFilename: file.originalname,
         mimetype: file.mimetype,
         altText,
-        clientId: clientId ?? this.cls.get('clientId'), 
+        clientId: targetClientId,
         isPrimary,
         displayOrder: displayOrder ?? 0,
         productId,
@@ -114,7 +135,7 @@ import {
 
       console.log('Creating image record:', imageData);
   
-      // If setting as primary, unset other primary images for the same product/variant
+      
       if (isPrimary) {
         await this.unsetOtherPrimaryImages(productId ?? '', variantId ?? '');
       }
@@ -123,7 +144,6 @@ import {
       try {
         return await this.imageRepository.save(newImage);
       } catch (error) {
-        // Clean up uploaded file if database save fails
         fs.unlink(file.path, (err) => {
           if (err) console.error('Error deleting file after DB error:', file.path, err);
         });

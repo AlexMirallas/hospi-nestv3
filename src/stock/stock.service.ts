@@ -68,12 +68,39 @@ export class StockService {
   }
 
     
-    const clientId = data.clientId ?? this.cls.get('clientId');
+    const clsClientId = this.cls.get('clientId');
     const userId = data.userId ?? this.cls.get('userId'); 
     const userRoles = this.cls.get('userRoles') as Role[] | undefined; 
+    const isSuperAdmin = userRoles?.includes(Role.SuperAdmin);
 
-   
-    if (!clientId) {
+    let targetClientId: string | undefined;
+
+    if( isSuperAdmin) {
+      if (!data.clientId) {
+        if (shouldManageTransaction && queryRunner) {
+            await queryRunner.rollbackTransaction();
+            await queryRunner.release();
+        }
+        throw new BadRequestException('SuperAdmin must provide clientId when recording a stock movement.');
+      }
+      targetClientId = data.clientId;
+    } else {
+      targetClientId = clsClientId;
+      if (!targetClientId) {
+        if (shouldManageTransaction && queryRunner){
+          await queryRunner.rollbackTransaction();
+          await queryRunner.release();
+        }
+        throw new InternalServerErrorException('Client context (clientId) not found.');
+      }
+      if (data.clientId && data.clientId !== targetClientId) {
+        this.logger.warn(`Non-SuperAdmin attempted to record movement for clientId ${data.clientId} but CLS clientId ${targetClientId} will be used.`);
+      }
+    }
+
+
+
+    if (!targetClientId) {
       if (shouldManageTransaction && queryRunner) await queryRunner.rollbackTransaction();
       if (shouldManageTransaction && queryRunner) await queryRunner.release();
       throw new InternalServerErrorException('Client context (clientId) not found.');
@@ -98,20 +125,23 @@ export class StockService {
     try {
       const productWhere: any = { id: data.productId};
       if (!userRoles?.includes(Role.SuperAdmin)) {
-        productWhere.clientId = clientId; 
+        productWhere.clientId = targetClientId; 
     }
       if (data.productId) {
-        const productExists = await manager.existsBy(Product, { id: data.productId, clientId });
+        const productExists = await manager.existsBy(Product, { id: data.productId, clientId: targetClientId });
+        console.log(`Checking product existence for ID ${data.productId}: ${productExists}`);
+        console.log(`Client ID for product check: ${targetClientId}`);
+        console.log(`User roles for product check: ${userRoles}`);
         if (!productExists) throw new NotFoundException(`Product with ID ${data.productId} not found for this client.`);
       } else if (data.variantId) {
-        const variantExists = await manager.existsBy(ProductVariant, { id: data.variantId, clientId });
+        const variantExists = await manager.existsBy(ProductVariant, { id: data.variantId, clientId: targetClientId });
         if (!variantExists) throw new NotFoundException(`Variant with ID ${data.variantId} not found for this client.`);
       }
 
       const stockLevelWhere = {
         productId: data.productId,
         variantId: data.variantId,
-        clientId: clientId,
+        clientId: targetClientId,
       };
 
 
@@ -125,7 +155,7 @@ export class StockService {
         const createData = {
           productId: data.productId,
           variantId: data.variantId, 
-          clientId: clientId,
+          clientId: targetClientId,
           quantity: 0,
         };
         stockLevel = manager.create(StockLevel, createData);
@@ -160,7 +190,7 @@ export class StockService {
         sourceDocumentId: data.sourceDocumentId,
         sourceDocumentType: data.sourceDocumentType,
         userId: userId, 
-        clientId: clientId, 
+        clientId: targetClientId, 
         movementDate: data.movementDate ?? new Date(), 
        
       });

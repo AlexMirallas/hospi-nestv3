@@ -48,7 +48,7 @@ export class VariantsController {
 
     @Put(':variantId') 
     @UseGuards(JwtAuthGuard, RolesGuard)
-    @Roles(Role.Admin) 
+    @Roles(Role.Admin, Role.SuperAdmin) 
     @UseInterceptors(SimpleRestContentRangeInterceptor) 
     async updateVariant(
         @Param('variantId', ParseUUIDPipe) variantId: string, 

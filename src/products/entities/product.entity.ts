@@ -25,9 +25,6 @@ export class Product {
   @Column({ type: 'boolean', default: true })
   isActive: boolean;
 
-  @Column({ type: 'int', default: 0 })
-  initialStock: number;
-
   @Column({ type: 'boolean', default: true })
   trackInventory: boolean;
 

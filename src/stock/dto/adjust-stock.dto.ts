@@ -32,4 +32,8 @@ export class AdjustStockDto {
   @IsOptional()
   @IsString()
   sourceDocumentType?: string;
+
+  @IsOptional()
+  @IsUUID()
+  clientId?: string; 
 }

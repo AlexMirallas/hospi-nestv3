@@ -36,10 +36,7 @@ import {
   
     @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
     priceAdjustment: number;
-  
-    @Column({ type: 'int', default: 0 })
-    initialStock: number;
-  
+
     @Column({ type: 'boolean', default: true })
     isActive: boolean;
   

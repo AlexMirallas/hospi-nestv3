@@ -13,6 +13,11 @@ import { DataSource,In, QueryRunner } from "typeorm";
 import { Role } from "../../common/enums/role.enum";
 import { StockService } from "src/stock/stock.service";
 import { StockMovementType } from "src/common/enums/stock-movement.enum";
+import { StockMovement } from "src/stock/entities/stock-movement.entity"; // Import
+import { StockLevel } from "src/stock/entities/stock-level.entity"; // Import
+import { ProductImage } from "../entities/image.entity"; // Import
+import * as fs from 'fs-extra'; // Import fs-extra for robust file operations
+import * as path from 'path'; // Import path
 
 
 
@@ -230,25 +235,6 @@ export class ProductVariantService {
           });
 
           const savedVariant = await queryRunner.manager.save(ProductVariant, newVariant);
-          const initialStockValue = createVariantDto.initialStock; 
-      if (typeof initialStockValue === 'number' && initialStockValue >= 0) {
-        console.log(`Recording initial stock (${initialStockValue}) for variant ${savedVariant.id}`);
-        await this.stockService.recordMovement({
-          variantId: savedVariant.id,
-          quantityChange: initialStockValue,
-          movementType: StockMovementType.INITIAL,
-          clientId: finalClientId,
-        },queryRunner);
-        console.log(`Initial stock recorded for variant ${savedVariant.id}`);
-      } else {
-        console.log(`No valid initial stock provided for variant ${savedVariant.id}. Recording 0 movement.`);
-        await this.stockService.recordMovement({
-          variantId: savedVariant.id,
-          quantityChange: 0,
-          movementType: StockMovementType.INITIAL,
-          clientId: finalClientId,
-        },queryRunner);
-      }
 
 
           const productAttributeValueEntities = attributeValues.map(attrValue => {
@@ -448,21 +434,68 @@ export class ProductVariantService {
       async removeVariant(id: string): Promise<ProductVariant> {
         const currentUserRoles = this.cls.get('userRoles') as Role[] | undefined;
         const currentUserClientId = this.cls.get('clientId') as string | undefined;
-        if (!currentUserRoles || !currentUserClientId) {
+        if (!currentUserRoles || !currentUserClientId && !currentUserRoles?.includes(Role.SuperAdmin)) { // Allow SuperAdmin if CLS is not set for them
           throw new InternalServerErrorException('User context not found.');
         }
         const isSuperAdmin = currentUserRoles.includes(Role.SuperAdmin);
 
-        const variant = await this.VariantRepo.findOneBy({ id });
-        if (!variant) {
-          throw new NotFoundException(`Product variant with ID ${id} not found`);
-        }
+        const queryRunner = this.dataSource.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction('SERIALIZABLE');
+      
 
-        if(!isSuperAdmin && variant.clientId !== currentUserClientId) {
-          console.warn(`Admin ${currentUserClientId} attempting to delete variant ${variant.id} owned by client ${variant.clientId}.`);
-          throw new ForbiddenException(`You do not have permission to delete this variant `);
+        try {
+          const variant = await queryRunner.manager.findOne(ProductVariant, {
+            where: { id },
+            relations: { product: true } // Need product for clientId if variant.clientId is not directly available or for context
+          });
+
+          if (!variant) {
+            throw new NotFoundException(`Product variant with ID ${id} not found`);
+          }
+
+          const targetClientId = variant.clientId; // Assuming variant has a clientId
+
+          if (!isSuperAdmin && targetClientId !== currentUserClientId) {
+            throw new ForbiddenException(`You do not have permission to delete this variant.`);
+          }
+
+          await queryRunner.manager.delete(ProductAttributeValue, { variant: { id: variant.id } });
+
+          await queryRunner.manager.delete(StockMovement, { variantId: variant.id, clientId: targetClientId });
+
+          await queryRunner.manager.delete(StockLevel, { variantId: variant.id, clientId: targetClientId });
+
+          const images = await queryRunner.manager.find(ProductImage, { where: { variantId: variant.id, clientId: targetClientId } });
+          if (images.length > 0) {
+            for (const image of images) {
+              try {
+                const filePath = path.join(process.cwd(), image.path);
+                if (await fs.pathExists(filePath)) {
+                  await fs.unlink(filePath);
+                } else {
+                }
+              } catch (fileError) {
+                throw new InternalServerErrorException(`Failed to delete image file ${image.path}: ${fileError.message}`);
+              }
+            }
+            await queryRunner.manager.remove(images); 
+          }
+
+
+          await queryRunner.manager.remove(ProductVariant, variant); 
+
+          await queryRunner.commitTransaction();
+          return variant; 
+        } catch (error) {
+          await queryRunner.rollbackTransaction();
+          if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof InternalServerErrorException) {
+            throw error;
+          }
+          throw new InternalServerErrorException(`Failed to remove product variant ${id}: ${error.message}`);
+        } finally {
+          await queryRunner.release();
+
         }
-        await this.VariantRepo.remove(variant);
-        return variant;
     }
 }
